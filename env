@@ -1,0 +1,45 @@
+CONTAINER_HOME=/path/to/containers/media-pipeline
+MEDIA_DIR=/ext-drive/media
+
+OPENVPN_USER=service_user
+OPENVPN_PASSWORD=service_password
+VPN_WATCHDOG_ENABLED=false
+
+INDEXERS=1337x,EZTV,TorrentGalaxyClone,ThePirateBay
+
+# Per-indexer overrides (names are normalized: letters/digits only, uppercased)
+#IDX_NZBGEEK__APIKEY=your_nzbgeek_key
+#IDX_DRUNKENSLUG__APIKEY=your_dsl_key
+
+# Generic Newznab (needs a baseUrl + apiKey)
+#IDX_NEWZNAB__BASEURL=https://news.example.com
+#IDX_NEWZNAB__APIKEY=abc123
+
+# Optional fallbacks if a specific indexer override is missing:
+USENET_DEFAULT_APIKEY=fallback_key_for_misc_sites
+USENET_DEFAULT_BASEURL=https://news.fallback.example.com
+
+SONARR_USER=user
+SONARR_PASS=password
+RADARR_USER=user
+RADARR_PASS=password
+PROWLARR_USER=user
+PROWLARR_PASS=password
+QBITTORRENT_USER=user
+QBITTORRENT_PASS=password
+
+CREATE_PROXY=true  #Required if CloudFlare rejects some indexers
+
+############################################################################
+
+CONF_HOME=${CONTAINER_HOME}/conf
+SCRIPTS_HOME=${CONTAINER_HOME}/scripts
+MOVIES_DIR=${MEDIA_DIR}/movies
+SHOWS_DIR=${MEDIA_DIR}/shows
+QBT_DOWNLOAD_DIR=${MEDIA_DIR}/downloads
+QBT_CONTAINER=qbittorrent
+QBT_CONF_FILE=${CONF_HOME}/${QBT_CONTAINER}/qBittorrent/qBittorrent.conf
+QBT_WAIT_URL=http://127.0.0.1:8080  #Ooptional; if publishing WebUI on gluetun like 8080:8080
+QBT_WAIT_TIMER=300
+AUTH_METHOD=forms           # or basic
+RESTART_AFTER_AUTH=true
