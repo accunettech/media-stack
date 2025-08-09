@@ -1,0 +1,160 @@
+networks:
+  media_net:
+    driver: bridge
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    networks: [media_net]
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=nordvpn
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${OPENVPN_USER}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      # Pick a country (or SERVER_HOSTNAME if you want exact server)
+      - SERVER_COUNTRIES=United States
+      # Health server so we can gate & alert
+      - HEALTH_SERVER_ADDRESS=0.0.0.0:9999
+      # Optional: allow LAN subnets from inside VPN namespace (usually not needed)
+      # - FIREWALL_OUTBOUND_SUBNETS=192.168.0.0/16,10.0.0.0/8
+    # Expose ONLY ports we need to reach services that live behind the VPN
+    ports:
+      - "8080:8080"           # qBittorrent Web UI
+      - "6881:6881"           # Torrent TCP
+      - "6881:6881/udp"       # Torrent UDP
+    volumes:
+      - ${CONF_HOME}/gluetun:/gluetun
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9999/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    labels:
+      deunhealth.restart.on.unhealthy: "true"
+
+  # When running in container, initial password will be randomized. Check logs after first run
+  # to get current password and then change after initial login.
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    #Shares gluetun's network namespace + firewall/kill switch
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+      - WEBUI_PORT=8080
+    volumes:
+      - ${CONF_HOME}/qbittorrent:/config
+      - ${QBT_DOWNLOAD_DIR}:/downloads
+    restart: unless-stopped
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    networks: [media_net]
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+    ports:
+      - "8096:8096"           # HTTP
+      # - "8920:8920"         # HTTPS (enable only if you manage certs)
+    #Enable below only if hardware supports VAAPI for Intel iGPU (quick sync)
+    #devices:
+    #  - /dev/dri:/dev/dri
+    volumes:
+      - ${CONF_HOME}/jellyfin:/config
+      - ${MEDIA_DIR}:/media:rw  # set to :ro if you don't want Jellyfin to write artwork/metadata
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    networks: [media_net]
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+    ports:
+      - "8989:8989"
+    volumes:
+      - ${CONF_HOME}/sonarr:/config
+      - ${SHOWS_DIR}:/shows
+      - ${QBT_DOWNLOAD_DIR}:/downloads
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    networks: [media_net]
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+    ports:
+      - "7878:7878"
+    volumes:
+      - ${CONF_HOME}/radarr:/config
+      - ${MOVIES_DIR}:/movies
+      - ${QBT_DOWNLOAD_DIR}:/downloads
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=info
+    networks: [media_net]
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    networks: [media_net]
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+    ports:
+      - "9696:9696"
+    volumes:
+      - ${CONF_HOME}/prowlarr:/config
+    restart: unless-stopped
+
+  # --- Auto-restart unhealthy containers (uses labels) ---
+  deunhealth:
+    image: qmcgaw/deunhealth:latest
+    container_name: deunhealth
+    restart: unless-stopped
+    network_mode: none
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # --- VPN watchdog to alert if VPN goes down  ---
+  vpn-watch:
+    image: python:3.12-alpine
+    container_name: vpn-watch
+    depends_on:
+      - gluetun
+    networks: [media_net]
+    environment:
+      - VPN_WATCHDOG_ENABLED=${VPN_WATCHDOG_ENABLED}
+    volumes:
+      - ${SCRIPTS_HOME}:/app
+    working_dir: /app
+    entrypoint: ["/bin/sh","-c"]
+    command: >
+      "pip install --no-cache-dir paho-mqtt requests &&
+       python /app/vpn_watch.py"
+    restart: unless-stopped
+

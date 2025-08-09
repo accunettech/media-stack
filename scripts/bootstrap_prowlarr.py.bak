@@ -1,0 +1,436 @@
+#!/usr/bin/env python3
+import os
+import time
+import requests
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+# ---------- Config via env ----------
+PROWLARR_URL = os.getenv("PROWLARR_URL", "http://prowlarr:9696").rstrip("/")
+SONARR_URL   = os.getenv("SONARR_URL",   "http://sonarr:8989").rstrip("/")
+RADARR_URL   = os.getenv("RADARR_URL",   "http://radarr:7878").rstrip("/")
+
+PROWLARR_API_KEY = (os.getenv("PROWLARR_API_KEY") or "").strip()
+SONARR_API_KEY   = (os.getenv("SONARR_API_KEY") or "").strip()
+RADARR_API_KEY   = (os.getenv("RADARR_API_KEY") or "").strip()
+
+INDEXERS = [x.strip() for x in os.getenv("INDEXERS", "1337x,EZTV,TorrentGalaxyClone").split(",") if x.strip()]
+WAIT_TIMEOUT = int(os.getenv("WAIT_TIMEOUT", "300"))
+
+CREATE_PROXY = os.getenv("CREATE_PROXY", "true").lower() == "true"
+FSR_NAME = os.getenv("FSR_NAME", "FlareSolverr")
+FSR_URL  = os.getenv("FSR_URL", "http://flaresolverr:8191").rstrip("/")
+
+# New: auth env vars
+AUTH_METHOD = os.getenv("AUTH_METHOD", "forms")  # try "basic" if your build rejects "forms"
+RESTART_AFTER_AUTH = os.getenv("RESTART_AFTER_AUTH", "true").lower() == "true"
+
+SONARR_USER = os.getenv("SONARR_USER")
+SONARR_PASS = os.getenv("SONARR_PASS")
+RADARR_USER = os.getenv("RADARR_USER")
+RADARR_PASS = os.getenv("RADARR_PASS")
+PROWLARR_USER = os.getenv("PROWLARR_USER")
+PROWLARR_PASS = os.getenv("PROWLARR_PASS")
+
+# Mounted config paths
+SONARR_CFG    = Path("/sonarr-config/config.xml")
+RADARR_CFG    = Path("/radarr-config/config.xml")
+PROWLARR_CFG  = Path("/prowlarr-config/config.xml")
+
+# Tag used to tie FlareSolverr proxy to CF-prone indexers
+CF_TAG_LABEL = os.getenv("CF_TAG", "cf")
+
+# ---------- Helpers: wait/log ----------
+def wait_for_http(url, timeout):
+    print(f"[~] Waiting for HTTP {url} (timeout {timeout}s)")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            r = requests.get(url, timeout=3)
+            if r.status_code < 400:
+                print(f"[+] {url} is up ({r.status_code})")
+                return True
+        except Exception as e:
+            print(f"  ...still waiting: {e}")
+        time.sleep(3)
+    return False
+
+def wait_for_file(path, timeout):
+    print(f"[~] Waiting for file {path} (timeout {timeout}s)")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if path.exists():
+            print(f"[+] Found {path}")
+            return True
+        time.sleep(2)
+        print("  ...still waiting")
+    return False
+
+# ---------- Keys from config.xml ----------
+def parse_api_key_from_config(xml_path: Path) -> str:
+    try:
+        tree = ET.parse(str(xml_path))
+        root = tree.getroot()
+        key = root.findtext(".//ApiKey")
+        return (key or "").strip()
+    except Exception as e:
+        print(f"[-] Failed to parse API key from {xml_path}: {e}")
+        return ""
+
+def ensure_keys():
+    global SONARR_API_KEY, RADARR_API_KEY, PROWLARR_API_KEY
+    wait_for_file(SONARR_CFG, WAIT_TIMEOUT)
+    wait_for_file(RADARR_CFG, WAIT_TIMEOUT)
+    wait_for_file(PROWLARR_CFG, WAIT_TIMEOUT)
+
+    if not SONARR_API_KEY:
+        SONARR_API_KEY = parse_api_key_from_config(SONARR_CFG)
+        print(f"[=] SONARR_API_KEY: {'set' if SONARR_API_KEY else 'missing'}")
+    if not RADARR_API_KEY:
+        RADARR_API_KEY = parse_api_key_from_config(RADARR_CFG)
+        print(f"[=] RADARR_API_KEY: {'set' if RADARR_API_KEY else 'missing'}")
+    if not PROWLARR_API_KEY:
+        PROWLARR_API_KEY = parse_api_key_from_config(PROWLARR_CFG)
+        print(f"[=] PROWLARR_API_KEY: {'set' if PROWLARR_API_KEY else 'missing'}")
+
+def prow_headers():
+    return {"X-Api-Key": PROWLARR_API_KEY}
+
+def set_arr_auth(base_url: str, api_key: str, api_ver: int, username: str, password: str, method: str = "forms"):
+    """
+    Set web auth on *Arr apps (Sonarr/Radarr: v3 API; Prowlarr: v1 API).
+    Uses enum for authenticationRequired and includes passwordConfirmation.
+    """
+    if not (username and password):
+        print(f"[=] Skipping auth for {base_url} (no username/password provided)")
+        return False
+
+    host_url = f"{base_url}/api/v{api_ver}/config/host"
+    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+    # 1) GET host config
+    try:
+        r = requests.get(host_url, headers=headers, timeout=10)
+        r.raise_for_status()
+        cfg = r.json()
+    except Exception as e:
+        print(f"[!] GET host config failed for {base_url}: {e}")
+        return False
+
+    # 2) Apply settings (enum + confirmation)
+    def apply_settings(cfg_obj, auth_method):
+        cfg_obj = dict(cfg_obj)  # shallow copy
+        cfg_obj["authenticationMethod"] = auth_method           # "forms" or "basic"
+        cfg_obj["authenticationRequired"] = "Enabled"           # <-- enum, not bool
+        cfg_obj["username"] = username
+        cfg_obj["password"] = password
+        # Some builds require this field to be present
+        cfg_obj["passwordConfirmation"] = password
+        return cfg_obj
+
+    # 3) Try with requested method first (default "forms"), then fallback to "basic"
+    for attempt_method in (method, "basic" if method != "basic" else None):
+        if attempt_method is None:
+            break
+        payload = apply_settings(cfg, attempt_method)
+        try:
+            u = requests.put(host_url, headers=headers, json=payload, timeout=15)
+            if u.status_code in (200, 202):
+                print(f"[+] Set auth for {base_url} (method={attempt_method})")
+                return True
+            else:
+                print(f"[!] PUT host config failed for {base_url} ({attempt_method}): {u.status_code} {u.text[:300]}")
+        except Exception as e:
+            print(f"[!] Error updating host config for {base_url} ({attempt_method}): {e}")
+
+    return False
+
+def restart_arr(base_url: str, api_ver: int, api_key: str):
+    """Attempt in-app restart to flip login UI reliably."""
+    try:
+        r = requests.post(f"{base_url}/api/v{api_ver}/system/restart",
+                          headers={"X-Api-Key": api_key}, timeout=10)
+        print(f"[=] restart {base_url} -> {r.status_code}")
+    except Exception as e:
+        print(f"[!] restart call failed for {base_url}: {e}")
+
+# ---------- Prowlarr Apps (Sonarr/Radarr) ----------
+def post_with_retries(url, headers=None, payload=None, tries=10, delay=3, timeout=15):
+    for i in range(tries):
+        try:
+            return requests.post(url, headers=headers or {}, json=payload, timeout=timeout)
+        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
+            if i == tries - 1:
+                raise
+            print(f"  ...POST retry {i+1}/{tries} to {url} after error: {e}")
+            time.sleep(delay)
+
+def add_app(app_name: str, base_url: str, api_key: str):
+    payload = {
+        "name": app_name,
+        "implementation": app_name,             # "Sonarr" or "Radarr"
+        "configContract": f"{app_name}Settings",
+        "fields": [
+            {"name": "apiKey",      "value": api_key},
+            {"name": "baseUrl",     "value": base_url},
+            {"name": "ProwlarrUrl", "value": PROWLARR_URL},
+        ],
+        "enable": True
+    }
+    url = f"{PROWLARR_URL}/api/v1/applications"
+    print(f"[~] Adding app {app_name} pointing to {base_url} with ProwlarrUrl={PROWLARR_URL}")
+    try:
+        r = post_with_retries(url, headers=prow_headers(), payload=payload, tries=10, delay=3, timeout=15)
+        if r.status_code in (200, 201):
+            print(f"[+] Added app {app_name}")
+        elif r.status_code == 409:
+            print(f"[=] App {app_name} already exists (409)")
+        else:
+            print(f"[!] add_app {app_name} failed: {r.status_code} {r.text}")
+    except Exception as e:
+        print(f"[!] add_app {app_name} error after retries: {e}")
+
+def set_app_synclevel_and_sync(app_name: str):
+    # Get apps
+    apps = requests.get(f"{PROWLARR_URL}/api/v1/applications",
+                        headers=prow_headers(), timeout=10).json()
+    app = next((a for a in apps if a.get("implementation") == app_name), None)
+    if not app:
+        print(f"[-] {app_name} app not found to set syncLevel")
+        return
+    app_id = app.get("id")
+
+    # Ensure ProwlarrUrl field is present & correct
+    fields = app.get("fields") or []
+    names = [f.get("name","").lower() for f in fields]
+    if "prowlarrurl" in names:
+        for f in fields:
+            if f.get("name","").lower() == "prowlarrurl":
+                f["value"] = PROWLARR_URL
+    else:
+        fields.append({"name":"ProwlarrUrl","value":PROWLARR_URL})
+
+    # Try both enum forms for Full Sync
+    for full_sync in ("FullSync", 2):
+        obj = dict(app)
+        obj["fields"] = fields
+        obj["syncLevel"] = full_sync
+        u = requests.put(f"{PROWLARR_URL}/api/v1/applications/{app_id}",
+                         headers=prow_headers(), json=obj, timeout=10)
+        if u.status_code in (200, 202):
+            print(f"[+] Set {app_name} syncLevel to {full_sync}")
+            break
+        else:
+            print(f"[!] PUT syncLevel={full_sync} -> {u.status_code}: {u.text[:300]}")
+
+    # Test and trigger sync (payload wants a list of IDs on many builds)
+    try:
+        t = requests.post(f"{PROWLARR_URL}/api/v1/applications/test",
+                          headers=prow_headers(), json=[app_id], timeout=10)
+        print(f"[=] applications/test -> {t.status_code}")
+    except Exception as e:
+        print(f"[!] applications/test error: {e}")
+
+    for action in ("syncindexers", "SyncAppIndexers"):
+        try:
+            s = requests.post(f"{PROWLARR_URL}/api/v1/applications/action/{action}",
+                              headers=prow_headers(), json=[app_id], timeout=10)
+            print(f"[=] action/{action} -> {s.status_code}")
+            if s.status_code in (200, 202, 204):
+                break
+        except Exception as e:
+            print(f"[!] action/{action} error: {e}")
+
+# ---------- Prowlarr: Tags/Proxy/Indexers ----------
+def list_tags():
+    r = requests.get(f"{PROWLARR_URL}/api/v1/tag", headers=prow_headers(), timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+def ensure_tag_id(label: str) -> int | None:
+    try:
+        tags = list_tags()
+        for t in tags:
+            if t.get("label") == label:
+                print(f"[=] Tag '{label}' exists (id={t.get('id')})")
+                return t.get("id")
+    except Exception as e:
+        print(f"[-] Could not list tags: {e}")
+    try:
+        r = requests.post(f"{PROWLARR_URL}/api/v1/tag",
+                          headers=prow_headers(),
+                          json={"label": label},
+                          timeout=10)
+        if r.status_code in (200, 201):
+            tid = r.json().get("id")
+            print(f"[+] Created tag '{label}' (id={tid})")
+            return tid
+        else:
+            print(f"[-] Create tag '{label}' failed: {r.status_code} {r.text[:300]}")
+    except Exception as e:
+        print(f"[-] Create tag error: {e}")
+    return None
+
+def get_proxy_base():
+    for base in ("/api/v1/indexerproxy", "/api/v1/proxy"):
+        try:
+            r = requests.get(f"{PROWLARR_URL}{base}", headers=prow_headers(), timeout=10)
+            if r.status_code in (200, 204, 405):
+                print(f"[=] Using proxy endpoint base: {base}")
+                return base
+        except Exception:
+            pass
+    print("[-] Could not determine proxy endpoint base. Fallback: /api/v1/indexerproxy")
+    return "/api/v1/indexerproxy"
+
+def list_proxies(proxy_base):
+    r = requests.get(f"{PROWLARR_URL}{proxy_base}", headers=prow_headers(), timeout=15)
+    if r.status_code != 200:
+        print(f"[-] list_proxies {proxy_base} status {r.status_code}: {r.text[:200]}")
+        return None
+    try:
+        return r.json()
+    except Exception as e:
+        print(f"[-] list_proxies JSON error: {e}; body: {r.text[:200]}")
+        return None
+
+def create_proxy_if_needed():
+    if not CREATE_PROXY:
+        print("[=] Proxy creation disabled (CREATE_PROXY=false)")
+        return None
+
+    proxy_base = get_proxy_base()
+    tag_id = ensure_tag_id(CF_TAG_LABEL)  # may be None
+
+    existing = list_proxies(proxy_base)
+    if isinstance(existing, list):
+        for p in existing:
+            if p.get("name") == FSR_NAME and (p.get("implementation") in ("FlareSolverr", "FLARESOLVERR")):
+                print(f"[=] Proxy '{FSR_NAME}' already exists (id={p.get('id')})")
+                return p.get("id")
+
+    payload = {
+        "name": FSR_NAME,
+        "implementation": "FlareSolverr",
+        "configContract": "FlareSolverrSettings",
+        "enable": True,
+        "tags": [tag_id] if tag_id is not None else [],
+        "fields": [
+            {"name": "host", "value": FSR_URL},
+            {"name": "requestTimeout", "value": 60},
+            {"name": "proxyType", "value": "FlareSolverr"}
+        ]
+    }
+
+    url = f"{PROWLARR_URL}{proxy_base}"
+    r = requests.post(url, headers=prow_headers(), json=payload, timeout=20)
+    if r.status_code in (200, 201):
+        pid = r.json().get("id")
+        print(f"[+] Created proxy '{FSR_NAME}' (id={pid}) at {proxy_base}")
+        return pid
+
+    alt_base = "/api/v1/proxy" if proxy_base.endswith("indexerproxy") else "/api/v1/indexerproxy"
+    print(f"[!] POST {proxy_base} -> {r.status_code}. Trying {alt_base}...")
+    r2 = requests.post(f"{PROWLARR_URL}{alt_base}", headers=prow_headers(), json=payload, timeout=20)
+    if r2.status_code in (200, 201):
+        pid = r2.json().get("id")
+        print(f"[+] Created proxy '{FSR_NAME}' (id={pid}) at {alt_base}")
+        return pid
+
+    print(f"[-] Proxy create failed. {proxy_base} -> {r.status_code} {r.text[:300]}  |  {alt_base} -> {r2.status_code} {r2.text[:300]}")
+    return None
+
+def get_indexer_definitions():
+    print("[~] Fetching indexer definitions")
+    r = requests.get(f"{PROWLARR_URL}/api/v1/indexer/schema", headers=prow_headers(), timeout=20)
+    r.raise_for_status()
+    return r.json()
+
+def create_indexer_with_optional_proxy(defs, name: str, proxy_id: int | None):
+    match = next((d for d in defs if d.get("name","").lower() == name.lower()
+                  or d.get("implementationName","").lower() == name.lower()), None)
+    if not match:
+        candidates = sorted({d.get("name") or d.get("implementationName") for d in defs if d.get("name") or d.get("implementationName")})
+        print(f"[-] No definition found for '{name}'. Try:\n  - " + "\n  - ".join(candidates[:40]))
+        return
+
+    tag_id = ensure_tag_id(CF_TAG_LABEL)
+
+    payload = {
+        "name": match.get("name") or match.get("implementationName"),
+        "implementationName": match.get("implementationName") or match.get("name"),
+        "implementation": match.get("implementation"),
+        "configContract": match.get("configContract"),
+        "protocol": match.get("protocol", "torrent"),
+        "appProfileId": 1,
+        "priority": 25,
+        "tags": [tag_id] if tag_id is not None else [],
+        "enable": True,
+        "supportsRss": True,
+        "supportsSearch": True,
+        "enableRss": True,
+        "enableSearch": True,
+        "useProxy": True if proxy_id else False,
+        "fields": match.get("fields", [])
+    }
+    if proxy_id:
+        payload["proxy"] = proxy_id
+        payload["proxyId"] = proxy_id
+
+    try:
+        r = requests.post(f"{PROWLARR_URL}/api/v1/indexer", headers=prow_headers(), json=payload, timeout=25)
+        if r.status_code in (200, 201):
+            idx_id = r.json().get("id")
+            print(f"[+] Created indexer '{name}' (id={idx_id}){' with proxy' if proxy_id else ''}")
+            return
+        else:
+            print(f"[!] Failed creating indexer '{name}': {r.status_code} {r.text[:400]}")
+    except Exception as e:
+        print(f"[!] Exception creating indexer '{name}': {e}")
+
+# ---------- Main ----------
+def main():
+    if not wait_for_http(PROWLARR_URL, WAIT_TIMEOUT): exit(1)
+    if not wait_for_http(SONARR_URL, WAIT_TIMEOUT): exit(1)
+    if not wait_for_http(RADARR_URL, WAIT_TIMEOUT): exit(1)
+
+    ensure_keys()
+    if not (PROWLARR_API_KEY and SONARR_API_KEY and RADARR_API_KEY):
+        print("[-] Missing API keys; ensure apps initialized or pass via env.")
+        exit(1)
+
+    # 1) Set auth first (if creds provided)
+    sonarr_auth_ok = set_arr_auth(SONARR_URL, SONARR_API_KEY, 3, SONARR_USER, SONARR_PASS, AUTH_METHOD)
+    radarr_auth_ok = set_arr_auth(RADARR_URL, RADARR_API_KEY, 3, RADARR_USER, RADARR_PASS, AUTH_METHOD)
+    prowlarr_auth_ok = set_arr_auth(PROWLARR_URL, PROWLARR_API_KEY, 1, PROWLARR_USER, PROWLARR_PASS, AUTH_METHOD)
+
+    # Optional restart (helps the UI flip consistently)
+    if RESTART_AFTER_AUTH:
+        if sonarr_auth_ok:  restart_arr(SONARR_URL, 3, SONARR_API_KEY)
+        if radarr_auth_ok:  restart_arr(RADARR_URL, 3, RADARR_API_KEY)
+        if prowlarr_auth_ok: restart_arr(PROWLARR_URL, 1, PROWLARR_API_KEY)
+
+        if prowlarr_auth_ok:
+            wait_for_http(PROWLARR_URL, 180)
+        if sonarr_auth_ok:
+            wait_for_http(SONARR_URL, 180)
+        if radarr_auth_ok:
+            wait_for_http(RADARR_URL, 180)
+
+    # 2) Register apps in Prowlarr + set sync level
+    add_app("Sonarr", SONARR_URL, SONARR_API_KEY)
+    add_app("Radarr", RADARR_URL, RADARR_API_KEY)
+    set_app_synclevel_and_sync("Sonarr")
+    set_app_synclevel_and_sync("Radarr")
+
+    # 3) Create FlareSolverr proxy (optional) and seed indexers
+    proxy_id = create_proxy_if_needed()
+    defs = get_indexer_definitions()
+    for idx in INDEXERS:
+        create_indexer_with_optional_proxy(defs, idx, proxy_id)
+
+    print("[✓] Prowlarr bootstrap complete")
+
+if __name__ == "__main__":
+    main()
+
