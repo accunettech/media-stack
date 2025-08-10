@@ -131,6 +131,23 @@ services:
       - ${CONF_HOME}/prowlarr:/config
     restart: unless-stopped
 
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    networks: [media_net]
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+    # SAB's default HTTP port is 8080; qB is already using 8080 on the host via gluetun.
+    # Expose SAB on 8081 externally to avoid a clash.
+    ports:
+      - "8081:8080"
+    volumes:
+      - ${CONF_HOME}/sabnzbd:/config
+      - ${QBT_DOWNLOAD_DIR}:/downloads
+    restart: unless-stopped
+
   # --- Auto-restart unhealthy containers (uses labels) ---
   deunhealth:
     image: qmcgaw/deunhealth:latest
@@ -157,4 +174,3 @@ services:
       "pip install --no-cache-dir paho-mqtt requests &&
        python /app/vpn_watch.py"
     restart: unless-stopped
-
