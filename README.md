@@ -1,5 +1,3 @@
-Requirements: Python 3 and Docker should be installed first!
-
 Run setup.sh.
 
 Once complete:
