@@ -3,7 +3,11 @@ Requirements: Python 3 and Docker should be installed first!
 Run setup.sh.
 
 Once complete:
-qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
+  - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
+  - Make sure media directory specified in .env exists and containers have permission to the file system
+  - Make sure there is a downloads subdirectory in media directory for qBittorrent and SABnzbd.
+  - See URLs for each app in stack below and double check the items under each.
+  - Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env
 
   qBittorrent: http://{docker-host}:8080/
 
