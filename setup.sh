@@ -12,7 +12,14 @@ docker compose up -d
 python scripts/config_stack.py
 
 cat << EOF
-App config tips (once)
+Notes:
+    - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
+    - Make sure media directory specified in .env exists and containers have permission to the file system
+    - Make sure there is a downloads subdirectory in media directory for qBittorrent and SABnzbd.
+    - See URLs for each app in stack below and double check the items under each.
+    - Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env
+
+App access and config tips
     qBittorrent: http://$HOSTNAME:8080/
 
     Sonarr: http://$HOSTNAME:8989/
