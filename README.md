@@ -1,4 +1,5 @@
-Run setup.sh.
+1. Modify .env
+2. Run setup.sh
 
 Once complete:
   - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
