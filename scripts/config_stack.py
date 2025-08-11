@@ -46,12 +46,8 @@ FSR_NAME = os.getenv("FSR_NAME", "FlareSolverr")
 # Optional: set web auth on *Arr themselves
 AUTH_METHOD = os.getenv("AUTH_METHOD", "forms")  # or "basic"
 RESTART_AFTER_AUTH = os.getenv("RESTART_AFTER_AUTH", "true").lower() == "true"
-SONARR_USER = os.getenv("SONARR_USER")
-SONARR_PASS = os.getenv("SONARR_PASS")
-RADARR_USER = os.getenv("RADARR_USER")
-RADARR_PASS = os.getenv("RADARR_PASS")
-PROWLARR_USER = os.getenv("PROWLARR_USER")
-PROWLARR_PASS = os.getenv("PROWLARR_PASS")
+UI_USER = "user"
+UI_PASS = "password"
 
 # qBittorrent — API endpoint (host-mapped) for bootstrap to talk to qB
 QBT_API_SCHEME = "https" if os.getenv("QBT_API_SSL","false").lower()=="true" else "http"
@@ -65,8 +61,6 @@ QBT_CONTAINER = os.getenv("QBT_CONTAINER", "qbittorrent")
 
 # If you want to set a known qB password now (recommended)
 QBT_SET_KNOWN_CREDS = True
-QBT_NEW_USER = os.getenv("QBITTORRENT_USER", "admin")
-QBT_NEW_PASS = os.getenv("QBITTORRENT_PASS", "")  # leave blank to keep temp password
 
 # Categories to use when adding the qB client into *Arr
 QBT_CAT_SONARR = os.getenv("QBITTORRENT_CAT_SONARR", "tv")
@@ -78,6 +72,9 @@ CF_TAG_LABEL = os.getenv("CF_TAG", "cf")
 # Usenet defaults (still supported)
 USENET_DEFAULT_APIKEY  = os.getenv("USENET_DEFAULT_APIKEY") or ""
 USENET_DEFAULT_BASEURL = os.getenv("USENET_DEFAULT_BASEURL") or ""
+
+SABNZBD_CFG = os.getenv("SABNZBD_CFG", f"{CONF_ROOT}/sabnzbd/sabnzbd.ini")
+SABNZBD_API_KEY = (os.getenv("SABNZBD_API_KEY") or "").strip()
 
 # ---------------------------
 # Small helpers
@@ -117,6 +114,20 @@ def parse_api_key_from_config(path_str) -> str:
     except Exception as e:
         print(f"[-] Failed to parse API key from {p}: {e}")
         return ""
+
+def parse_sab_api_key(path_str) -> str:
+    try:
+        # very lightweight .ini scrape; avoids needing configparser section names
+        with open(path_str, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                if line.strip().lower().startswith("api_key"):
+                    # formats like: api_key = abc123
+                    parts = line.split("=", 1)
+                    if len(parts) == 2:
+                        return parts[1].strip()
+    except Exception as e:
+        print(f"[-] Failed to parse SAB API key from {path_str}: {e}")
+    return ""
 
 def ensure_keys():
     global SONARR_API_KEY, RADARR_API_KEY, PROWLARR_API_KEY
@@ -552,10 +563,10 @@ def prepare_qbt_via_api() -> tuple[str, str] | tuple[None, None]:
         return (None, None)
 
     temp_pw = get_qbt_temp_password(QBT_CONTAINER)
-    if not temp_pw and not QBT_NEW_PASS:
+    if not temp_pw and not UI_PASS:
         # Nothing we can do; hope creds already set
         print("[~] No temp pass and no new pass provided; assuming qB already has stable creds.")
-        return (QBT_NEW_USER, QBT_NEW_PASS) if QBT_NEW_PASS else (None, None)
+        return (UI_USER, UI_PASS) if UI_PASS else (None, None)
 
     # If we have a temp password, try to log in with it
     if temp_pw:
@@ -564,11 +575,11 @@ def prepare_qbt_via_api() -> tuple[str, str] | tuple[None, None]:
             print("[-] Could not log in with temp password. You can set QBITTORRENT_PASS and re-run.")
             return ("admin", temp_pw)  # still return so user sees it/you can try using it
         # Optionally set a known password (recommended)
-        if QBT_SET_KNOWN_CREDS and QBT_NEW_PASS:
-            creds_prefs = {"web_ui_username": QBT_NEW_USER, "web_ui_password": QBT_NEW_PASS}
+        if QBT_SET_KNOWN_CREDS and UI_PASS:
+            creds_prefs = {"web_ui_username": UI_USER, "web_ui_password": UI_PASS}
             if qbt_set_preferences(sess, QBT_API_BASE, creds_prefs):
                 print("[+] Set known qBittorrent credentials via API")
-                return (QBT_NEW_USER, QBT_NEW_PASS)
+                return (UI_USER, UI_PASS)
             else:
                 print("[!] Failed setting known qBittorrent credentials; using temp password")
                 return ("admin", temp_pw)
@@ -577,7 +588,7 @@ def prepare_qbt_via_api() -> tuple[str, str] | tuple[None, None]:
             return ("admin", temp_pw)
 
     # No temp, but the user provided a new pass — just return those
-    return (QBT_NEW_USER, QBT_NEW_PASS)
+    return (UI_USER, UI_PASS)
 
 # ---------------------------
 # Add qBittorrent to Sonarr/Radarr
@@ -629,6 +640,52 @@ def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
     except Exception as e:
         print(f"[!] Exception adding qBittorrent to {app_url}: {e}")
 
+# Add SAB to Sonarr/Radarr
+def ensure_sab_client(app_url, api_key, name="sabnzbd",
+                      host="sabnzbd", port=8080,
+                      sab_api_key="", category=None, use_ssl=False):
+    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+    try:
+        existing = requests.get(f"{app_url}/api/v3/downloadclient", headers=headers, timeout=10).json()
+        for cli in existing:
+            if cli.get("implementation") == "SABnzbd":
+                print(f"[=] SABnzbd already present in {app_url} (id={cli.get('id')})")
+                return
+    except Exception as e:
+        print(f"[!] Failed to list download clients for {app_url}: {e}")
+        return
+
+    payload = {
+        "enable": True,
+        "protocol": "usenet",
+        "priority": 1,
+        "configContract": "SABnzbdSettings",
+        "implementation": "SABnzbd",
+        "implementationName": "SABnzbd",
+        "name": name,
+        "fields": [
+            {"name": "host", "value": host},
+            {"name": "port", "value": port},
+            {"name": "useSsl", "value": bool(use_ssl)},
+            {"name": "urlBase", "value": ""},
+            {"name": "apiKey", "value": sab_api_key}
+        ]
+    }
+    if category:
+        payload["fields"].append({"name": "category", "value": category})
+
+    try:
+        r = requests.post(f"{app_url}/api/v3/downloadclient", headers=headers, json=payload, timeout=15)
+        if r.status_code in (200, 201):
+            print(f"[+] Added SABnzbd to {app_url}")
+        elif r.status_code == 409:
+            print(f"[=] SABnzbd already exists in {app_url}")
+        else:
+            print(f"[!] Failed to add SABnzbd to {app_url}: {r.status_code} {r.text[:200]}")
+    except Exception as e:
+        print(f"[!] Exception adding SABnzbd to {app_url}: {e}")
+
 # ---------------------------
 def main():
     # Ensure qB WebUI is reachable (host-mapped port)
@@ -646,9 +703,9 @@ def main():
         exit(1)
 
     # (Optional) Set web auth on *Arr
-    sonarr_auth_ok = set_arr_auth(SONARR_URL, SONARR_API_KEY, 3, SONARR_USER, SONARR_PASS, AUTH_METHOD)
-    radarr_auth_ok = set_arr_auth(RADARR_URL, RADARR_API_KEY, 3, RADARR_USER, RADARR_PASS, AUTH_METHOD)
-    prowlarr_auth_ok = set_arr_auth(PROWLARR_URL, PROWLARR_API_KEY, 1, PROWLARR_USER, PROWLARR_PASS, AUTH_METHOD)
+    sonarr_auth_ok = set_arr_auth(SONARR_URL, SONARR_API_KEY, 3, UI_USER, UI_PASS, AUTH_METHOD)
+    radarr_auth_ok = set_arr_auth(RADARR_URL, RADARR_API_KEY, 3, UI_USER, UI_PASS, AUTH_METHOD)
+    prowlarr_auth_ok = set_arr_auth(PROWLARR_URL, PROWLARR_API_KEY, 1, UI_USER, UI_PASS, AUTH_METHOD)
 
     if RESTART_AFTER_AUTH:
         if sonarr_auth_ok:  restart_arr(SONARR_URL, 3, SONARR_API_KEY)
@@ -672,9 +729,9 @@ def main():
 
     # qB: login with temp pass and optionally set a known password
     qbt_user, qbt_pass = prepare_qbt_via_api()
-    if not qbt_user and QBT_NEW_PASS:
+    if not qbt_user and UI_PASS:
         # No temp found; assume new pass is already set
-        qbt_user, qbt_pass = (QBT_NEW_USER, QBT_NEW_PASS)
+        qbt_user, qbt_pass = (UI_USER, UI_PASS)
 
     # Add qBittorrent to Sonarr/Radarr (containers will reach it at gluetun:8080)
     ensure_qbittorrent_client(
@@ -693,6 +750,30 @@ def main():
         category=QBT_CAT_RADARR,
         use_ssl=False
     )
+
+    # Add SABnzbd to Sonarr/Radarr (containers will reach it at sabnzbd:8080 on media_net container network))
+    if not SABNZBD_API_KEY:
+        if wait_for_file(SABNZBD_CFG, WAIT_TIMEOUT):
+            SABNZBD_API_KEY = parse_sab_api_key(SABNZBD_CFG)
+
+    if SABNZBD_API_KEY:
+        # SAB runs on media_net, exposed as sabnzbd:8080 to other containers
+        ensure_sab_client(
+            SONARR_URL, SONARR_API_KEY,
+            host="sabnzbd", port=8080,
+            sab_api_key=SABNZBD_API_KEY,
+            category="tv",     # matches SAB category you created
+            use_ssl=False      # set True if you switch SAB UI to HTTPS
+        )
+        ensure_sab_client(
+            RADARR_URL, RADARR_API_KEY,
+            host="sabnzbd", port=8080,
+            sab_api_key=SABNZBD_API_KEY,
+            category="movies",
+            use_ssl=False
+        )
+    else:
+        print("[-] SABNZBD_API_KEY missing; skip adding SAB client.")
 
     print("[✓] Bootstrap complete")
 
