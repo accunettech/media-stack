@@ -203,7 +203,7 @@ else
 fi
 
 bootstrap_python_venv
-
+echo
 echo "Creating config directories..."
 source .env
 mkdir -p $CONF_HOME/{gluetun,qbittorrent,jellyfin,sonarr,radarr,prowlarr}
@@ -211,11 +211,12 @@ mkdir -p $MEDIA_DIR
 mkdir -p $MOVIES_DIR
 mkdir -p $SHOWS_DIR
 mkdir -p $DOWNLOADS_DIR
-
+echo
 docker compose up -d
-
+echo
+echo "Configuring stack..."
 python scripts/config_stack.py
-
+echo
 echo
 echo "✅ Setup complete."
 echo
