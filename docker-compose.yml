@@ -18,11 +18,7 @@ services:
       - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
       # Pick a country (or SERVER_HOSTNAME if you want exact server)
       - SERVER_COUNTRIES=United States
-      # Health server so we can gate & alert
       - HEALTH_SERVER_ADDRESS=0.0.0.0:9999
-      # Optional: allow LAN subnets from inside VPN namespace (usually not needed)
-      # - FIREWALL_OUTBOUND_SUBNETS=192.168.0.0/16,10.0.0.0/8
-    # Expose ONLY ports we need to reach services that live behind the VPN
     ports:
       - "8080:8080"           # qBittorrent Web UI
       - "6881:6881"           # Torrent TCP
@@ -59,21 +55,26 @@ services:
     restart: unless-stopped
 
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:latest
+    #image: lscr.io/linuxserver/jellyfin:latest
+    build: .
     container_name: jellyfin
     networks: [media_net]
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=America/Detroit
+      - LIBVA_DRIVER_NAME=iHD
     ports:
       - "8096:8096"           # HTTP
-      # - "8920:8920"         # HTTPS (enable only if you manage certs)
     #Enable below only if hardware supports VAAPI for Intel iGPU (quick sync)
     #devices:
     #  - /dev/dri:/dev/dri
+    #group_add:
+    #  - 993  # run stat -c '%g' /dev/dri/renderD128 to get GUID used here
+    #  - 44   # run stat -c '%g' /dev/dri/card0 to get GUID used here
     volumes:
-      - ${CONF_HOME}/jellyfin:/config
+      - ${CONF_HOME}/jellyfin/config:/config
+      - ${CONF_HOME}/jellyfin/cache:/cache
       - ${MEDIA_DIR}:/media:rw  # set to :ro if you don't want Jellyfin to write artwork/metadata
     restart: unless-stopped
 
