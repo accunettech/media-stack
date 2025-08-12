@@ -107,7 +107,7 @@ services:
     volumes:
       - ${CONF_HOME}/radarr:/config
       - ${MOVIES_DIR}:/movies
-      - ${QBT_DOWNLOAD_DIR}:/downloads
+      - ${DOWNLOADS_DIR}:/downloads
     restart: unless-stopped
 
   flaresolverr:
