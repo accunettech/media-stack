@@ -205,7 +205,12 @@ fi
 bootstrap_python_venv
 
 echo "Creating config directories..."
-mkdir -p ./conf/{gluetun,qbittorrent,jellyfin,sonarr,radarr,prowlarr}
+source .env
+mkdir -p $CONF_HOME/{gluetun,qbittorrent,jellyfin,sonarr,radarr,prowlarr}
+mkdir -p $MEDIA_DIR
+mkdir -p $MOVIES_DIR
+mkdir -p $SHOWS_DIR
+mkdir -p $DOWNLOADS_DIR
 
 docker compose up -d
 
