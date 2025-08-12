@@ -31,7 +31,7 @@ Once complete:
         - If using usenet, set priority low and set torrent indexers high
 
   SABnzbd: http://{docker-host}:8081/
-        - Setup Downloader with API key (from sabnzbd setup) in Sanarr and Radarr if Usenet will be used
+        - Setup Downloader with API key (Settings > Servers > Add Server) if Usenet will be used
 
 
 PERFORMANCE NOTES:
