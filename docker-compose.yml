@@ -51,7 +51,7 @@ services:
       - WEBUI_PORT=8080
     volumes:
       - ${CONF_HOME}/qbittorrent:/config
-      - ${QBT_DOWNLOAD_DIR}:/downloads
+      - ${DOWNLOADS_DIR}:/downloads
     restart: unless-stopped
 
   jellyfin:
@@ -91,7 +91,7 @@ services:
     volumes:
       - ${CONF_HOME}/sonarr:/config
       - ${SHOWS_DIR}:/shows
-      - ${QBT_DOWNLOAD_DIR}:/downloads
+      - ${DOWNLOADS_DIR}:/downloads
     restart: unless-stopped
 
   radarr:
