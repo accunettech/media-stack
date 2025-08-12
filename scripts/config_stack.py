@@ -74,7 +74,6 @@ USENET_DEFAULT_APIKEY  = os.getenv("USENET_DEFAULT_APIKEY") or ""
 USENET_DEFAULT_BASEURL = os.getenv("USENET_DEFAULT_BASEURL") or ""
 
 SABNZBD_CFG = os.getenv("SABNZBD_CFG", f"{CONF_ROOT}/sabnzbd/sabnzbd.ini")
-SABNZBD_API_KEY = (os.getenv("SABNZBD_API_KEY") or "").strip()
 
 # ---------------------------
 # Small helpers
@@ -88,7 +87,7 @@ def wait_for_http(url, timeout):
                 print(f"[+] {url} is up ({r.status_code})")
                 return True
         except Exception as e:
-            print(f"  ...still waiting: {e}")
+            print(f"  ...still waiting...")
         time.sleep(3)
     return False
 
@@ -643,48 +642,107 @@ def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
 # Add SAB to Sonarr/Radarr
 def ensure_sab_client(app_url, api_key, name="sabnzbd",
                       host="sabnzbd", port=8080,
-                      sab_api_key="", category=None, use_ssl=False):
+                      sab_api_key="", category=None, use_ssl=False,
+                      username="", password=""):
     headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
 
+    # 1) Skip if already added
     try:
         existing = requests.get(f"{app_url}/api/v3/downloadclient", headers=headers, timeout=10).json()
         for cli in existing:
             if cli.get("implementation") == "SABnzbd":
                 print(f"[=] SABnzbd already present in {app_url} (id={cli.get('id')})")
-                return
+                return True
     except Exception as e:
         print(f"[!] Failed to list download clients for {app_url}: {e}")
-        return
+        return False
 
-    payload = {
-        "enable": True,
-        "protocol": "usenet",
-        "priority": 1,
-        "configContract": "SABnzbdSettings",
-        "implementation": "SABnzbd",
-        "implementationName": "SABnzbd",
-        "name": name,
-        "fields": [
+    # 2) Try to fetch schema (robust)
+    try:
+        schemas = requests.get(f"{app_url}/api/v3/downloadclient/schema", headers=headers, timeout=10).json()
+        sab_schema = next((s for s in schemas if s.get("implementation") == "SABnzbd"), None)
+    except Exception as e:
+        sab_schema = None
+        print(f"[!] Could not fetch SAB schema from {app_url}: {e}")
+
+    # Values we plan to set
+    values = {
+        "host": host,
+        "port": port,
+        "useSsl": bool(use_ssl),
+        "urlBase": "",
+        "apiKey": sab_api_key,
+        "username": username or "",
+        "password": password or "",
+    }
+
+    fields = []
+    if sab_schema and sab_schema.get("fields"):
+        # Prefer exact schema field names
+        schema_fields = [f.get("name") for f in sab_schema["fields"] if f.get("name")]
+        # Pick the right category field if present
+        for cat in ("movieCategory", "tvCategory", "category"):
+            if category and cat in schema_fields:
+                values[cat] = category
+                break
+
+        # Build fields respecting schema order and defaults
+        for f in sab_schema["fields"]:
+            nm = f.get("name")
+            if nm in values:
+                fields.append({"name": nm, "value": values[nm]})
+            else:
+                fields.append({"name": nm, "value": f.get("value", f.get("defaultValue", ""))})
+
+        payload = {
+            "enable": True,
+            "protocol": "usenet",
+            "priority": 1,
+            "configContract": sab_schema.get("configContract", "SABnzbdSettings"),
+            "implementation": sab_schema.get("implementation", "SABnzbd"),
+            "implementationName": sab_schema.get("implementationName", "SABnzbd"),
+            "name": name,
+            "fields": fields
+        }
+    else:
+        # Fallback (older/newer builds): try common names; this is what used to 400
+        fields = [
             {"name": "host", "value": host},
             {"name": "port", "value": port},
             {"name": "useSsl", "value": bool(use_ssl)},
             {"name": "urlBase", "value": ""},
-            {"name": "apiKey", "value": sab_api_key}
+            {"name": "apiKey", "value": sab_api_key},
+            {"name": "username", "value": username or ""},
+            {"name": "password", "value": password or ""},
         ]
-    }
-    if category:
-        payload["fields"].append({"name": "category", "value": category})
+        # Heuristic: choose movieCategory for Radarr, tvCategory for Sonarr
+        if category:
+            if "radarr" in app_url.lower():
+                fields.append({"name": "movieCategory", "value": category})
+            else:
+                fields.append({"name": "tvCategory", "value": category})
 
-    try:
-        r = requests.post(f"{app_url}/api/v3/downloadclient", headers=headers, json=payload, timeout=15)
-        if r.status_code in (200, 201):
-            print(f"[+] Added SABnzbd to {app_url}")
-        elif r.status_code == 409:
-            print(f"[=] SABnzbd already exists in {app_url}")
-        else:
-            print(f"[!] Failed to add SABnzbd to {app_url}: {r.status_code} {r.text[:200]}")
-    except Exception as e:
-        print(f"[!] Exception adding SABnzbd to {app_url}: {e}")
+        payload = {
+            "enable": True,
+            "protocol": "usenet",
+            "priority": 1,
+            "configContract": "SABnzbdSettings",
+            "implementation": "SABnzbd",
+            "implementationName": "SABnzbd",
+            "name": name,
+            "fields": fields
+        }
+
+    r = requests.post(f"{app_url}/api/v3/downloadclient", headers=headers, json=payload, timeout=15)
+    if r.status_code in (200, 201):
+        print(f"[+] Added SABnzbd to {app_url}")
+        return True
+    elif r.status_code == 409:
+        print(f"[=] SABnzbd already exists in {app_url}")
+        return True
+    else:
+        print(f"[!] Failed to add SABnzbd to {app_url}: {r.status_code} {r.text}")
+        return False
 
 # ---------------------------
 def main():
@@ -752,9 +810,9 @@ def main():
     )
 
     # Add SABnzbd to Sonarr/Radarr (containers will reach it at sabnzbd:8080 on media_net container network))
-    if not SABNZBD_API_KEY:
-        if wait_for_file(SABNZBD_CFG, WAIT_TIMEOUT):
-            SABNZBD_API_KEY = parse_sab_api_key(SABNZBD_CFG)
+    SABNZBD_API_KEY = ""
+    if wait_for_file(SABNZBD_CFG, WAIT_TIMEOUT):
+        SABNZBD_API_KEY = parse_sab_api_key(SABNZBD_CFG)
 
     if SABNZBD_API_KEY:
         # SAB runs on media_net, exposed as sabnzbd:8080 to other containers
