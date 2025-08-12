@@ -31,3 +31,16 @@ Once complete:
 
   SABnzbd: http://{docker-host}:8081/
         Setup Downloader with API key (from sabnzbd setup) in Sanarr and Radarr if Usenet will be used
+
+
+PERFORMANCE NOTES:
+It is highly recommended to run the media server on a device with a GPU. Barebones suggestion that has been tested is an Intel N100 Mini PC running Ubuntu Linux. Without, there may be playback issues if a DV WebDL movie is downloaded (common these days) and the device being streamed to only supports SDR. CPU likely will not be able to handle the load. If running on a device like a raspberry pi, it's best to add TRaSH custom formats in Radarr to block DV (WEBDL) downloads from being processed and added to the library. That reduces how often tone-mapping is required in down-conversion during transcoding.
+
+If hosting on an N100 Mini PC, the following changes should be made in Jellyfin (Dashboard > Playback > Transcoding):
+- Hardware acceleration: Intel QuickSync (QSV) :: change acceleration mode as necessary, based on GPU in host
+- Enable Hardware Decoding: H264, VC1, HEVC 10 bit, VP9 10 bit
+- Enable Prefer OS native DXVA or VA-API hardware decoders
+- Enable hardware encoding
+- Enable tone mapping
+- Tone mapping algorighm: BT.2390
+- Tone mapping range: TV (unless main client is not a TV; then Auto)
