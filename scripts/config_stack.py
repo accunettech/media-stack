@@ -986,7 +986,6 @@ def ensure_tag_id(label: str, api_key) -> int | None:
         tags = list_tags(api_key)
         for t in tags:
             if t.get("label") == label:
-                print(f"[=] Tag '{label}' exists (id={t.get('id')})")
                 return t.get("id")
     except Exception as e:
         print(f"[-] Could not list tags: {e}")
