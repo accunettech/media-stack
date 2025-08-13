@@ -5,6 +5,7 @@ import time
 import json
 import subprocess
 import requests
+import socket
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -13,81 +14,320 @@ from dotenv import load_dotenv
 load_dotenv(".env")
 
 # ---------------------------
-# Host → apps (script runs on host)
-PROWLARR_URL = os.getenv("PROWLARR_URL", "http://localhost:9696").rstrip("/")
-SONARR_URL   = os.getenv("SONARR_URL",   "http://localhost:8989").rstrip("/")
-RADARR_URL   = os.getenv("RADARR_URL",   "http://localhost:7878").rstrip("/")
-
-# In-Docker (apps talk to each other using service DNS names)
-PROWLARR_URL_IN_DOCKER = "http://prowlarr:9696"
-SONARR_URL_IN_DOCKER   = "http://sonarr:8989"
-RADARR_URL_IN_DOCKER   = "http://radarr:7878"
-FSR_URL_IN_DOCKER      = "http://flaresolverr:8191"
-
-# API keys (read from config.xml if not provided)
-PROWLARR_API_KEY = (os.getenv("PROWLARR_API_KEY") or "").strip()
-SONARR_API_KEY   = (os.getenv("SONARR_API_KEY") or "").strip()
-RADARR_API_KEY   = (os.getenv("RADARR_API_KEY") or "").strip()
-
-# Absolute host paths to *Arr config.xml files (left side of your volume mounts)
 CONF_ROOT    = os.getenv("CONF_HOME", "")
-SONARR_CFG   = os.getenv("SONARR_CFG",   f"{CONF_ROOT}/sonarr/config.xml")
-RADARR_CFG   = os.getenv("RADARR_CFG",   f"{CONF_ROOT}/radarr/config.xml")
-PROWLARR_CFG = os.getenv("PROWLARR_CFG", f"{CONF_ROOT}/prowlarr/config.xml")
-
-# Indexers to seed in Prowlarr
-INDEXERS = [x.strip() for x in os.getenv("INDEXERS", "1337x,EZTV,TorrentGalaxyClone,ThePirateBay").split(",") if x.strip()]
 WAIT_TIMEOUT = int(os.getenv("WAIT_TIMEOUT", "300"))
+HOSTNAME = socket.gethostname()
+CONTAINER_MOVIES_DIR='/movies'
+CONTAINER_SHOWS_DIR='/shows'
 
-# Prowlarr proxy (FlareSolverr)
+AUTH_METHOD = os.getenv("AUTH_METHOD", "forms")  # or "basic"
+UI_USER = os.getenv("UI_USER", "user")
+UI_PASS = os.getenv("UI_PASS", "password")
+
+PROWLARR_URL = os.getenv("PROWLARR_URL", "http://localhost:9696").rstrip("/")
+PROWLARR_URL_IN_DOCKER = "http://prowlarr:9696"
+PROWLARR_CFG = os.getenv("PROWLARR_CFG", f"{CONF_ROOT}/prowlarr/config.xml")
+PROWLARR_REQ_TIMEOUT = int(os.getenv("PROWLARR_REQ_TIMEOUT", "120"))
+PROWLARR_CONTAINER = 'prowlarr'
+INDEXERS = [x.strip() for x in os.getenv("INDEXERS", "1337x,EZTV,TorrentGalaxyClone,ThePirateBay").split(",") if x.strip()]
+
+SONARR_URL   = os.getenv("SONARR_URL",   "http://localhost:8989").rstrip("/")
+SONARR_URL_IN_DOCKER   = "http://sonarr:8989"
+SONARR_CFG   = os.getenv("SONARR_CFG",   f"{CONF_ROOT}/sonarr/config.xml")
+SONARR_CONTAINER = 'sonarr'
+
+RADARR_URL   = os.getenv("RADARR_URL",   "http://localhost:7878").rstrip("/")
+RADARR_URL_IN_DOCKER   = "http://radarr:7878"
+RADARR_CFG   = os.getenv("RADARR_CFG",   f"{CONF_ROOT}/radarr/config.xml")
+RADARR_CONTAINER = 'radarr'
+
 CREATE_PROXY = os.getenv("CREATE_PROXY", "true").lower() == "true"
 FSR_NAME = os.getenv("FSR_NAME", "FlareSolverr")
+FSR_URL_IN_DOCKER      = "http://flaresolverr:8191"
+CF_TAG_LABEL = os.getenv("CF_TAG", "cf")
 
-# Optional: set web auth on *Arr themselves
-AUTH_METHOD = os.getenv("AUTH_METHOD", "forms")  # or "basic"
-RESTART_AFTER_AUTH = os.getenv("RESTART_AFTER_AUTH", "true").lower() == "true"
-UI_USER = "user"
-UI_PASS = "password"
-
-# qBittorrent — API endpoint (host-mapped) for bootstrap to talk to qB
 QBT_API_SCHEME = "https" if os.getenv("QBT_API_SSL","false").lower()=="true" else "http"
 QBT_API_HOST   = os.getenv("QBT_API_HOST", "127.0.0.1")
 QBT_API_PORT   = int(os.getenv("QBT_API_PORT", "8080"))
 QBT_API_BASE   = f"{QBT_API_SCHEME}://{QBT_API_HOST}:{QBT_API_PORT}"
 QBT_API_WAIT_TIMEOUT = int(os.getenv("QBT_API_WAIT_TIMEOUT", "240"))
-
-# qBittorrent container name to scrape logs from
 QBT_CONTAINER = os.getenv("QBT_CONTAINER", "qbittorrent")
-
-# If you want to set a known qB password now (recommended)
 QBT_SET_KNOWN_CREDS = True
-
-# Categories to use when adding the qB client into *Arr
 QBT_CAT_SONARR = os.getenv("QBITTORRENT_CAT_SONARR", "tv")
 QBT_CAT_RADARR = os.getenv("QBITTORRENT_CAT_RADARR", "movies")
 
-# Tag used to tie FlareSolverr proxy to CF-prone indexers (harmless if unused)
-CF_TAG_LABEL = os.getenv("CF_TAG", "cf")
-
-# Usenet defaults (still supported)
 USENET_DEFAULT_APIKEY  = os.getenv("USENET_DEFAULT_APIKEY") or ""
 USENET_DEFAULT_BASEURL = os.getenv("USENET_DEFAULT_BASEURL") or ""
 
 SABNZBD_CFG = os.getenv("SABNZBD_CFG", f"{CONF_ROOT}/sabnzbd/sabnzbd.ini")
+SAB_WHITELIST = [x.strip() for x in os.getenv("SAB_WHITELIST", f"sabnzbd,localhost,127.0.0.1,{HOSTNAME},{HOSTNAME}.local").split(",") if x.strip()]
+SABNZBD_CONTAINER = os.getenv("SABNZBD_CONTAINER", "sabnzbd")
+SAB_CATS = [x.strip() for x in os.getenv("SAB_CATEGORIES", "tv,movies").split(",") if x.strip()]
+SAB_CONFIG_PROVIDER = os.getenv("SAB_CONFIG_PROVIDER","false").lower()=="true"
+SAB_HTTP_PORT = int(os.getenv("SAB_HTTP_PORT", "8080"))
+SAB_LANG        = os.getenv("SAB_LANG", "en")
+SAB_SRV_NAME    = os.getenv("SAB_SRV_NAME", "provider")
+SAB_SRV_HOST    = os.getenv("SAB_SRV_HOST", "")
+SAB_SRV_PORT    = int(os.getenv("SAB_SRV_PORT", "563"))
+SAB_SRV_SSL     = int(os.getenv("SAB_SRV_SSL", "1"))
+SAB_SRV_USER    = os.getenv("SAB_SRV_USER", "")
+SAB_SRV_PASS    = os.getenv("SAB_SRV_PASS", "")
+SAB_SRV_CONNS   = int(os.getenv("SAB_SRV_CONNS", "20"))
+SAB_SRV_PRIORITY= int(os.getenv("SAB_SRV_PRIORITY", "0"))
+
+COMPLETED_DOWNLOADS = "/downloads"
+INCOMPLETE_DOWNLOADS = "/downloads/incomplete"
 
 # ---------------------------
-# Small helpers
-def wait_for_http(url, timeout):
-    print(f"[~] Waiting for HTTP {url} (timeout {timeout}s)")
+
+def ensure_root_folder(app_url: str, api_key: str, path: str) -> bool:
+    """
+    Ensure a root folder exists in Sonarr/Radarr.
+    Returns True if created, False if already present or on error.
+    """
+    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+    try:
+        existing = requests.get(f"{app_url}/api/v3/rootfolder", headers=headers, timeout=10).json()
+    except Exception as e:
+        print(f"[!] List rootfolder failed at {app_url}: {e}")
+        return False
+
+    # Already there?
+    for rf in existing or []:
+        if (rf.get("path") or "").rstrip("/") == path.rstrip("/"):
+            print(f"[=] Root folder already present in {app_url}: {path}")
+            return False
+
+    # Try the simplest payload first; fall back to variants if needed
+    payload_variants = [
+        {"path": path},
+        {"path": path, "name": path},                          # older builds sometimes accept name
+        {"path": path, "defaultTags": []},                     # harmless extra
+    ]
+
+    for payload in payload_variants:
+        try:
+            r = requests.post(f"{app_url}/api/v3/rootfolder", headers=headers, json=payload, timeout=15)
+            if r.status_code in (200, 201):
+                print(f"[+] Added root folder to {app_url}: {path}")
+                return True
+            # Common 400s: folder missing/not writable; print body once and bail to caller
+            if r.status_code == 400:
+                print(f"[!] Create rootfolder 400 at {app_url}: {r.text[:400]}")
+                break
+            else:
+                print(f"[!] Create rootfolder failed at {app_url}: {r.status_code} {r.text[:200]}")
+        except Exception as e:
+            print(f"[!] Create rootfolder exception at {app_url}: {e}")
+
+    return False
+
+def set_prowlarr_indexer_priorities(usenet_prio=10, torrent_prio=30, api_key=""):
+    headers = {"X-Api-Key": api_key}
+    """Lower = higher priority. Set Usenet indexers ahead of torrent indexers."""
+    try:
+        idxs = requests.get(f"{PROWLARR_URL}/api/v1/indexer",
+                            headers=headers, timeout=20).json()
+    except Exception as e:
+        print(f"[!] Could not list Prowlarr indexers: {e}")
+        return
+    changed = 0
+    for idx in idxs:
+        proto = (idx.get("protocol") or "").lower()
+        target = usenet_prio if proto == "usenet" else torrent_prio
+        if idx.get("priority") != target:
+            idx["priority"] = target
+            try:
+                r = requests.put(f"{PROWLARR_URL}/api/v1/indexer/{idx['id']}",
+                                 headers=headers, json=idx, timeout=20)
+                if r.status_code in (200, 202):
+                    changed += 1
+                    print(f"[+] {idx.get('name')} -> priority {target} ({proto})")
+                else:
+                    print(f"[!] Failed to set priority for {idx.get('name')}: {r.status_code} {r.text[:200]}")
+            except Exception as e:
+                print(f"[!] Error updating {idx.get('name')}: {e}")
+    if changed == 0:
+        print("[=] Prowlarr indexer priorities already correct")
+
+def prefer_usenet_in_arr(app_url, api_key):
+    """Enable both protocols and prefer Usenet in the app's indexer config."""
+    headers = {"X-Api-Key": api_key}
+    try:
+        cfg = requests.get(f"{app_url}/api/v3/config/indexer", headers=headers, timeout=15).json()
+    except Exception as e:
+        print(f"[!] GET indexer config failed for {app_url}: {e}")
+        return
+
+    # Try common field names observed in Sonarr/Radarr
+    before = cfg.copy()
+    if "enableUsenet" in cfg:   cfg["enableUsenet"] = True
+    if "enableTorrent" in cfg:  cfg["enableTorrent"] = True
+
+    # One of these is usually present:
+    if "preferUsenet" in cfg:
+        cfg["preferUsenet"] = True
+    elif "preferredProtocol" in cfg:
+        # sometimes: 'usenet' / 'torrent'
+        cfg["preferredProtocol"] = "usenet"
+
+    if cfg != before:
+        try:
+            r = requests.put(f"{app_url}/api/v3/config/indexer", headers=headers, json={k:v for k,v in cfg.items() if k != "updateAutomatically"}, timeout=15)
+            print(f"[+] Prefer Usenet in {app_url}: {r.status_code}")
+        except Exception as e:
+            print(f"[!] PUT indexer config failed for {app_url}: {e}")
+    else:
+        print(f"[=] {app_url} already prefers Usenet (or fields not present)")
+
+def set_download_client_priorities(app_url, api_key, sab_first=True):
+    """Ensure SAB has higher priority than qB (e.g. SAB=1, qB=2)."""
+    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+    try:
+        clients = requests.get(f"{app_url}/api/v3/downloadclient", headers=headers, timeout=15).json()
+    except Exception as e:
+        print(f"[!] Could not list download clients for {app_url}: {e}")
+        return
+    # determine desired numbers
+    sab_prio, qb_prio = (1, 2) if sab_first else (2, 1)
+    changed = False
+    for cli in clients:
+        impl = cli.get("implementation")
+        if impl == "SABnzbd" and cli.get("priority") != sab_prio:
+            cli["priority"] = sab_prio; changed = True
+        if impl == "QBittorrent" and cli.get("priority") != qb_prio:
+            cli["priority"] = qb_prio; changed = True
+    if changed:
+        for cli in clients:
+            try:
+                r = requests.put(f"{app_url}/api/v3/downloadclient/{cli['id']}",
+                                 headers=headers, json=cli, timeout=15)
+                if r.status_code not in (200, 202):
+                    print(f"[!] Failed updating {impl} in {app_url}: {r.status_code} {r.text[:200]}")
+            except Exception as e:
+                print(f"[!] Error updating client in {app_url}: {e}")
+        print(f"[+] Set download client priorities (SAB first) in {app_url}")
+    else:
+        print(f"[=] Download client priorities already correct in {app_url}")
+
+def set_arr_updates_to_docker(app_url, api_key):
+    import requests
+    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+    # 1) Read host config
+    r = requests.get(f"{app_url}/api/v3/config/host", headers=headers, timeout=15)
+    if r.status_code != 200:
+        raise RuntimeError(f"GET host config failed {r.status_code}: {r.text[:300]}")
+    cfg = r.json()
+    cfg_id = cfg.get("id")
+    if cfg_id is None:
+        raise RuntimeError("Host config did not include 'id'")
+
+    # 2) Tweak update-related fields if present
+    desired = dict(cfg)
+
+    # Many builds use 'updateMechanism' with values like 'docker' or 'builtin'
+    if "updateMechanism" in desired:
+        desired["updateMechanism"] = "docker"
+
+    # Older/newer keys you may see; set them only if they exist
+    for k, v in [
+        ("branch", "stable"),
+        ("updateAutomatically", False),  # some builds use this
+        ("automatic", False),            # older name in a few branches
+    ]:
+        if k in desired:
+            desired[k] = v
+
+    if desired == cfg:
+        print(f"[=] Updates already set to Docker in {app_url}")
+        return
+
+    # 3) PUT back to /config/host/{id}
+    u = requests.put(f"{app_url}/api/v3/config/host/{cfg_id}",
+                     headers=headers, json=desired, timeout=15)
+    if u.status_code not in (200, 202):
+        raise RuntimeError(f"PUT host config failed {u.status_code}: {u.text[:400]}")
+    print(f"[+] Set updates to Docker in {app_url}")
+
+def compose_container_id(service: str) -> str | None:
+    try:
+        out = subprocess.run(["docker", "compose", "ps", "-q", service],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, timeout=10).stdout.strip()
+        return out or None
+    except Exception:
+        return None
+
+def wait_for_container_ready(service: str, port: int | None = None, timeout: int = 180) -> bool:
+    """Wait until the container is healthy (if healthcheck exists) or, if none,
+    until HTTP on localhost:port inside the container responds."""
+    def _cid(svc):
+        try:
+            return subprocess.run(["docker", "compose", "ps", "-q", svc],
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  text=True, timeout=10).stdout.strip() or None
+        except Exception:
+            return None
+
+    cid = _cid(service)
+    if not cid:
+        print(f"[!] No container id for '{service}'")
+        return False
+
+    print(f"[~] Waiting for '{service}' to be ready (timeout {timeout}s)")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            # Resilient template: use Health if present, else fall back to State.Status
+            tmpl = "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}"
+            st = subprocess.run(["docker", "inspect", cid, "--format", tmpl],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, timeout=5).stdout.strip()
+        except Exception:
+            st = ""
+
+        if st == "healthy":
+            print(f"[✔] '{service}' is healthy")
+            return True
+
+        # If there's no healthcheck (or just 'running'), optionally probe HTTP inside the container
+        if port is not None:
+            try:
+                # Alpine-based images may not have bash; use sh -lc
+                probe = f'curl -fsS http://localhost:{port}/ || wget -qO- http://localhost:{port}/'
+                rc = subprocess.run(["docker", "compose", "exec", "-T", service, "sh", "-lc", probe],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, timeout=8)
+                if rc.returncode == 0 and rc.stdout:
+                    print(f"[✔] '{service}' HTTP is responding on localhost:{port}")
+                    return True
+            except Exception:
+                pass
+
+        time.sleep(3)
+
+    print(f"[!] '{service}' not ready before timeout (status seen: '{st}')")
+    return False
+
+def restart_container(service: str):
+    try:
+        subprocess.run(["docker", "compose", "restart", service], check=False, timeout=60)
+        print(f"[=] Sent container restart to '{service}'")
+    except Exception as e:
+        print(f"[!] Restart '{service}' failed: {e}")
+
+def wait_for_http(url, timeout, app_name):
+    print(f"[~] Waiting for {app_name} to start (timeout {timeout}s)")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             r = requests.get(url, timeout=5)
             if r.status_code < 500:
-                print(f"[+] {url} is up ({r.status_code})")
+                print(f"[✔] {app_name} is up ({r.status_code})")
                 return True
         except Exception as e:
-            print(f"  ...still waiting...")
+            print(f"   ...still waiting...")
         time.sleep(3)
     return False
 
@@ -97,7 +337,7 @@ def wait_for_file(path_str, timeout):
     deadline = time.time() + timeout
     while time.time() < deadline:
         if p.exists():
-            print(f"[+] Found {p}")
+            print(f"[✔] Found {p}")
             return True
         time.sleep(2)
         print("  ...still waiting")
@@ -114,13 +354,404 @@ def parse_api_key_from_config(path_str) -> str:
         print(f"[-] Failed to parse API key from {p}: {e}")
         return ""
 
+def _sab_set_misc_kv(lines: list[str], key: str, value: str) -> tuple[list[str], bool]:
+    changed = False
+    misc_start, next_section = None, None
+    for i, line in enumerate(lines):
+        if line.strip().lower() == "[misc]":
+            misc_start = i
+            for j in range(i+1, len(lines)):
+                s = lines[j].strip()
+                if s.startswith("[") and s.endswith("]") and not s.startswith("[["):
+                    next_section = j
+                    break
+            break
+    rx = re.compile(rf"^\s*{re.escape(key)}\s*=", re.I)
+    if misc_start is None:
+        lines += ["", "[misc]", f"{key} = {value}"]
+        changed = True
+    else:
+        end = next_section if next_section is not None else len(lines)
+        found = False
+        for idx in range(misc_start+1, end):
+            if rx.match(lines[idx] or ""):
+                cur = lines[idx].split("=", 1)[1].strip()
+                if cur != value:
+                    lines[idx] = f"{key} = {value}"
+                    changed = True
+                found = True
+                break
+        if not found:
+            lines.insert(misc_start+1, f"{key} = {value}")
+            changed = True
+    return lines, changed
+
+def ensure_sab_language(path_str: str, lang: str="en") -> bool:
+    p = Path(path_str)
+    try:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        print(f"[-] Read SAB config failed: {e}")
+        return False
+    lines = text.splitlines()
+    lines, changed = _sab_set_misc_kv(lines, "language", lang)
+    if not changed:
+        print("[=] SAB language already set")
+        return False
+    try:
+        backup = p.with_suffix(p.suffix + ".bak")
+        backup.write_text(text, encoding="utf-8", errors="ignore")
+        out = "\n".join(lines) + ("\n" if not text.endswith("\n") else "")
+        p.write_text(out, encoding="utf-8")
+        print(f"[+] Set SAB language={lang}")
+        return True
+    except Exception as e:
+        print(f"[-] Write SAB language failed: {e}")
+        return False
+
+def ensure_sab_server(path_str: str, name: str, host: str, port: int,
+                      ssl: int, username: str, password: str,
+                      connections: int=20, priority: int=0) -> bool:
+    """
+    Add/overwrite a [[name]] server block under [servers].
+    Returns True if file changed.
+    """
+    if not host:
+        print("[~] No SAB server host provided; skipping server bootstrap.")
+        return False
+    p = Path(path_str)
+    try:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        print(f"[-] Read SAB config failed: {e}")
+        return False
+
+    lines = text.splitlines()
+    changed = False
+
+    # find [servers] section bounds
+    srv_start, next_section = None, None
+    for i, line in enumerate(lines):
+        if line.strip().lower() == "[servers]":
+            srv_start = i
+            for j in range(i+1, len(lines)):
+                s = lines[j].strip()
+                if s.startswith("[") and s.endswith("]") and not s.startswith("[["):
+                    next_section = j
+                    break
+            break
+
+    def block_for(nm: str) -> list[str]:
+        nm = nm.strip()
+        return [
+            f"  [[{nm}]]",
+            f"    host = {host}",
+            f"    port = {port}",
+            f"    username = {username}",
+            f"    password = {password}",
+            f"    connections = {connections}",
+            f"    ssl = {ssl}",
+            "    enable = 1",
+            f"    priority = {priority}",
+            "    retention = 0",
+            "    optional = 0",
+            "    send_group = 0",
+            "    fetch_by_msgid = 0",
+            "    server_usenet_only = 1"
+        ]
+
+    # find existing [[name]] block
+    def find_block_indices(start, end, nm):
+        open_rx = re.compile(rf"^\s*\[\[\s*{re.escape(nm)}\s*\]\]\s*$", re.I)
+        start_idx = None
+        for j in range(start+1, end):
+            if open_rx.match(lines[j] if j < len(lines) else ""):
+                start_idx = j
+                # block ends at next [[...]] or next top-level [section]
+                for k in range(j+1, end):
+                    s = lines[k].strip()
+                    if s.startswith("[[") and s.endswith("]]"):
+                        return (start_idx, k)
+                return (start_idx, end)
+        return (None, None)
+
+    if srv_start is None:
+        # create [servers] and add our block
+        lines += ["", "[servers]"] + block_for(name)
+        changed = True
+    else:
+        end = next_section if next_section is not None else len(lines)
+        s_idx, e_idx = find_block_indices(srv_start, end, name)
+        new_block = block_for(name)
+        if s_idx is None:
+            # append new server at end of [servers]
+            insert_at = end
+            lines[insert_at:insert_at] = new_block
+            changed = True
+        else:
+            # replace existing block if content differs
+            cur = lines[s_idx:e_idx]
+            if cur != new_block:
+                lines[s_idx:e_idx] = new_block
+                changed = True
+
+    if not changed:
+        print(f"[=] SAB server '{name}' already configured")
+        return False
+
+    try:
+        backup = p.with_suffix(p.suffix + ".bak")
+        backup.write_text(text, encoding="utf-8", errors="ignore")
+        out = "\n".join(lines) + ("\n" if not text.endswith("\n") else "")
+        p.write_text(out, encoding="utf-8")
+        print(f"[+] Configured SAB server '{name}' ({host}:{port}, ssl={ssl})")
+        return True
+    except Exception as e:
+        print(f"[-] Write SAB server failed: {e}")
+        return False
+
+def ensure_sab_folders(path_str: str, temp_dir: str, complete_dir: str) -> bool:
+    """
+    Set [misc] download_dir (temp/incomplete) and complete_dir (finished) in sabnzbd.ini.
+    Returns True if the file was changed.
+    """
+    p = Path(path_str)
+    try:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        print(f"[-] Cannot read SAB config at {p}: {e}")
+        return False
+
+    lines = text.splitlines()
+    changed = False
+
+    # find [misc] section
+    misc_start, next_section = None, None
+    for i, line in enumerate(lines):
+        if line.strip().lower() == "[misc]":
+            misc_start = i
+            for j in range(i+1, len(lines)):
+                s = lines[j].strip()
+                if s.startswith("[") and s.endswith("]") and not s.startswith("[["):
+                    next_section = j
+                    break
+            break
+
+    def set_kv(name: str, value: str):
+        nonlocal changed, lines, misc_start, next_section
+        rx = re.compile(rf"^\s*{re.escape(name)}\s*=", re.I)
+        if misc_start is None:
+            # create [misc] at end
+            lines += ["", "[misc]", f"{name} = {value}"]
+            misc_start = len(lines) - 2
+            changed = True
+        else:
+            end = next_section if next_section is not None else len(lines)
+            # try to find existing key in [misc]
+            for idx in range(misc_start+1, end):
+                if rx.match(lines[idx] or ""):
+                    cur = lines[idx].split("=", 1)[1].strip()
+                    if cur != value:
+                        lines[idx] = f"{name} = {value}"
+                        changed = True
+                    return
+            # not found → insert right after [misc]
+            lines.insert(misc_start+1, f"{name} = {value}")
+            changed = True
+
+    # Set desired paths
+    set_kv("download_dir", temp_dir)    # "Temporary Download Folder"
+    set_kv("complete_dir", complete_dir)  # "Completed Download Folder"
+    # Clear dir_base if present so it doesn't override the above
+    # (empty string is accepted; SAB will honor explicit dirs)
+    set_kv("dir_base", "")
+
+    if not changed:
+        print("[=] SAB folders already set")
+        return False
+
+    try:
+        backup = p.with_suffix(p.suffix + ".bak")
+        backup.write_text(text, encoding="utf-8", errors="ignore")
+        out = "\n".join(lines)
+        if not out.endswith("\n"): out += "\n"
+        p.write_text(out, encoding="utf-8")
+        print(f"[✔] Updated SAB folders in {p} (backup {backup.name})")
+        return True
+    except Exception as e:
+        print(f"[-] Failed writing SAB folders: {e}")
+        return False
+
+def ensure_sab_categories(path_str: str, categories: list[str]) -> bool:
+    """
+    Ensure SAB has [[<cat>]] blocks in the [categories] section.
+    Returns True if file changed (requires restart), False otherwise.
+    """
+    p = Path(path_str)
+    try:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        print(f"[-] Cannot read SAB config at {p}: {e}")
+        return False
+
+    lines = text.splitlines()
+    changed = False
+
+    # find [categories] section boundary
+    cat_start, next_section = None, None
+    for i, line in enumerate(lines):
+        if line.strip().lower() == "[categories]":
+            cat_start = i
+            # find where next top-level [section] begins
+            for j in range(i+1, len(lines)):
+                s = lines[j].strip()
+                if s.startswith("[") and s.endswith("]") and not s.startswith("[["):
+                    next_section = j
+                    break
+            break
+
+    # existing cat names: match '[[name]]' under [categories]
+    existing = set()
+    if cat_start is not None:
+        end = next_section if next_section is not None else len(lines)
+        for j in range(cat_start+1, end):
+            m = re.match(r"\s*\[\[\s*([^\]]+?)\s*\]\]\s*$", lines[j])
+            if m:
+                existing.add(m.group(1).strip().lower())
+
+    def cat_block(name: str) -> list[str]:
+        # safe, minimal block; SAB fills defaults
+        return [
+            f"  [[{name}]]",
+            "    priority = -100",
+            "    pp = 3",
+            "    script = ",
+            f"    dir = {name}",
+            "    newzbin = "
+        ]
+
+    if cat_start is None:
+        # create [categories] at end
+        lines += ["", "[categories]"]
+        for c in categories:
+            lines += cat_block(c)
+        changed = True
+    else:
+        # append missing categories inside [categories]
+        missing = [c for c in categories if c.lower() not in existing]
+        if missing:
+            insert_at = next_section if next_section is not None else len(lines)
+            block = []
+            for c in missing:
+                block += cat_block(c)
+            lines[insert_at:insert_at] = block
+            changed = True
+
+    if not changed:
+        print("[=] SAB categories already present:", ", ".join(sorted(existing)))
+        return False
+
+    # backup + write
+    try:
+        backup = p.with_suffix(p.suffix + ".bak")
+        backup.write_text(text, encoding="utf-8", errors="ignore")
+        out = "\n".join(lines)
+        if not out.endswith("\n"): out += "\n"
+        p.write_text(out, encoding="utf-8")
+        print(f"[✔] Added SAB categories {categories} in {p} (backup {backup.name})")
+        return True
+    except Exception as e:
+        print(f"[-] Failed writing SAB categories: {e}")
+        return False
+
+def ensure_sab_whitelist(path_str: str, wanted_hosts: list[str]) -> bool:
+    """
+    Ensure sabnzbd.ini has [misc] host_whitelist including wanted_hosts.
+    Returns True if a change was made (and container restarted), False otherwise.
+    """
+    p = Path(path_str)
+    try:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        print(f"[-] Cannot read SAB config at {p}: {e}")
+        return False
+
+    lines = text.splitlines()
+    in_misc = False
+    misc_start = None
+    wl_idx = None
+
+    # Locate [misc] section and any existing host_whitelist
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.lower() == "[misc]":
+            in_misc = True
+            misc_start = i
+            continue
+        if in_misc and s.startswith("[") and s.endswith("]"):
+            # next section begins; stop scanning for whitelist
+            break
+        if in_misc and re.match(r"^\s*host_whitelist\s*=", line, flags=re.I):
+            wl_idx = i
+
+    changed = False
+    def join_hosts(hosts: list[str]) -> str:
+        # SAB accepts comma-separated list
+        hosts = ",".join(dict.fromkeys([h for h in hosts if h]))  # dedupe, keep order
+        print(f"[=] Setting whitelisted hosts: {hosts}")
+        return hosts
+
+    if misc_start is None:
+        # no [misc] section; create one at end
+        lines += ["", "[misc]", f"host_whitelist = {join_hosts(SAB_WHITELIST)}"]
+        changed = True
+    else:
+        if wl_idx is not None:
+            current_val = lines[wl_idx].split("=", 1)[1].strip()
+            # split on commas or whitespace
+            current_hosts = [h for h in re.split(r"[, \t]+", current_val) if h]
+            merged = list(dict.fromkeys(current_hosts + wanted_hosts))
+            if merged != current_hosts:
+                lines[wl_idx] = f"host_whitelist = {join_hosts(merged)}"
+                changed = True
+        else:
+            # insert right after [misc]
+            insert_at = misc_start + 1
+            lines.insert(insert_at, f"host_whitelist = {join_hosts(wanted_hosts)}")
+            changed = True
+
+    if not changed:
+        print("[=] SAB host_whitelist already includes required hosts.")
+        return False
+
+    # Backup and write
+    try:
+        backup = p.with_suffix(p.suffix + ".bak")
+        backup.write_text(text, encoding="utf-8", errors="ignore")
+        out = "\n".join(lines)
+        if not out.endswith("\n"): out += "\n"
+        p.write_text(out, encoding="utf-8")
+        print(f"[✔] Updated SAB host_whitelist in {p} (backup at {backup.name})")
+    except Exception as e:
+        print(f"[-] Failed writing SAB config: {e}")
+        return False
+
+    # Restart SAB container so the change takes effect
+    try:
+        subprocess.run(["docker", "restart", SABNZBD_CONTAINER], check=False, timeout=30)
+        time.sleep(5)
+        print(f"[=] Restarted container '{SABNZBD_CONTAINER}'")
+    except Exception as e:
+        print(f"[!] Could not restart SAB container '{SABNZBD_CONTAINER}': {e}")
+
+    return True
+
 def parse_sab_api_key(path_str) -> str:
     try:
         # very lightweight .ini scrape; avoids needing configparser section names
         with open(path_str, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
                 if line.strip().lower().startswith("api_key"):
-                    # formats like: api_key = abc123
                     parts = line.split("=", 1)
                     if len(parts) == 2:
                         return parts[1].strip()
@@ -128,24 +759,13 @@ def parse_sab_api_key(path_str) -> str:
         print(f"[-] Failed to parse SAB API key from {path_str}: {e}")
     return ""
 
-def ensure_keys():
-    global SONARR_API_KEY, RADARR_API_KEY, PROWLARR_API_KEY
-    wait_for_file(SONARR_CFG, WAIT_TIMEOUT)
-    wait_for_file(RADARR_CFG, WAIT_TIMEOUT)
-    wait_for_file(PROWLARR_CFG, WAIT_TIMEOUT)
+def get_arr_keys():
+    SONARR_API_KEY = parse_api_key_from_config(SONARR_CFG)
+    RADARR_API_KEY = parse_api_key_from_config(RADARR_CFG)
+    PROWLARR_API_KEY = parse_api_key_from_config(PROWLARR_CFG)
+    print (f"[=] Discovered API keys :: Radarr: {RADARR_API_KEY}, Sonarr: {SONARR_API_KEY}, Prowlarr: {PROWLARR_API_KEY}")
+    return RADARR_API_KEY, SONARR_API_KEY, PROWLARR_API_KEY
 
-    if not SONARR_API_KEY:
-        SONARR_API_KEY = parse_api_key_from_config(SONARR_CFG)
-        print(f"[=] SONARR_API_KEY: {'set' if SONARR_API_KEY else 'missing'}")
-    if not RADARR_API_KEY:
-        RADARR_API_KEY = parse_api_key_from_config(RADARR_CFG)
-        print(f"[=] RADARR_API_KEY: {'set' if RADARR_API_KEY else 'missing'}")
-    if not PROWLARR_API_KEY:
-        PROWLARR_API_KEY = parse_api_key_from_config(PROWLARR_CFG)
-        print(f"[=] PROWLARR_API_KEY: {'set' if PROWLARR_API_KEY else 'missing'}")
-
-# ---------------------------
-# *Arr auth (optional)
 def set_arr_auth(base_url: str, api_key: str, api_ver: int, username: str, password: str, method: str = "forms"):
     if not (username and password):
         print(f"[=] Skipping auth for {base_url} (no username/password provided)")
@@ -178,7 +798,7 @@ def set_arr_auth(base_url: str, api_key: str, api_ver: int, username: str, passw
         try:
             u = requests.put(host_url, headers=headers, json=payload, timeout=15)
             if u.status_code in (200, 202):
-                print(f"[+] Set auth for {base_url} (method={attempt_method})")
+                print(f"[✔] Set auth for {base_url} (method={attempt_method})")
                 return True
             else:
                 print(f"[!] PUT host config failed for {base_url} ({attempt_method}): {u.status_code} {u.text[:300]}")
@@ -186,20 +806,46 @@ def set_arr_auth(base_url: str, api_key: str, api_ver: int, username: str, passw
             print(f"[!] Error updating host config for {base_url} ({attempt_method}): {e}")
     return False
 
-def restart_arr(base_url: str, api_ver: int, api_key: str):
-    try:
-        r = requests.post(f"{base_url}/api/v{api_ver}/system/restart",
-                          headers={"X-Api-Key": api_key}, timeout=10)
-        print(f"[=] restart {base_url} -> {r.status_code}")
-    except Exception as e:
-        print(f"[!] restart call failed for {base_url}: {e}")
+def prow_get_apps(api_key):
+    headers = {"X-Api-Key": api_key}
+    r = requests.get(f"{PROWLARR_URL}/api/v1/applications",
+                     headers=headers, timeout=PROWLARR_REQ_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
 
-# ---------------------------
-# Prowlarr apps + proxy + indexers
-def prow_headers():
-    return {"X-Api-Key": PROWLARR_API_KEY}
+def prow_get_indexers(api_key):
+    headers = {"X-Api-Key": api_key}
+    r = requests.get(f"{PROWLARR_URL}/api/v1/indexer", headers=headers, timeout=PROWLARR_REQ_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
 
-def post_with_retries(url, headers=None, payload=None, tries=10, delay=3, timeout=15):
+def _norm(s: str) -> str:
+    return re.sub(r'\W+', '', (s or '').lower())
+
+def _merge_fields(existing: list[dict], new_fields: list[dict]) -> list[dict]:
+    out = list(existing or [])
+    by_name = {f.get("name"): i for i,f in enumerate(out) if f.get("name")}
+    for nf in new_fields or []:
+        n = nf.get("name")
+        if not n:
+            continue
+        if n in by_name:
+            out[by_name[n]]["value"] = nf.get("value")
+        else:
+            out.append({"name": n, "value": nf.get("value")})
+    return out
+
+def http_put_with_retries(url, headers, json_obj, tries=5, delay=3, timeout=PROWLARR_REQ_TIMEOUT):
+    for i in range(tries):
+        try:
+            r = requests.put(url, headers=headers, json=json_obj, timeout=timeout)
+            return r
+        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
+            if i == tries - 1: raise
+            print(f"  ...PUT retry {i+1}/{tries} after error: {e}")
+            time.sleep(delay)
+
+def post_with_retries(url, headers=None, payload=None, tries=4, delay=4, timeout=PROWLARR_REQ_TIMEOUT):
     for i in range(tries):
         try:
             return requests.post(url, headers=headers or {}, json=payload, timeout=timeout)
@@ -209,41 +855,101 @@ def post_with_retries(url, headers=None, payload=None, tries=10, delay=3, timeou
             print(f"  ...POST retry {i+1}/{tries} to {url} after error: {e}")
             time.sleep(delay)
 
-def add_app(app_name: str, base_url_in_docker: str, api_key: str):
+def add_app(app_name: str, base_url_in_docker: str, app_api_key: str, prowlarr_api_key):
+    # Check if an app already exists with this Name or Implementation
+    headers = {"X-Api-Key": prowlarr_api_key}
+    try:
+        apps = prow_get_apps(prowlarr_api_key)
+    except Exception as e:
+        print(f"[!] Could not list applications: {e}")
+        apps = []
+
+    existing = next((a for a in apps
+                     if a.get("name") == app_name or a.get("implementation") == app_name), None)
+
+    # Build/update fields
+    def ensure_fields(fields):
+        fields = list(fields or [])
+        def set_field(n,v):
+            for f in fields:
+                if f.get("name") == n:
+                    f["value"] = v
+                    return
+            fields.append({"name": n, "value": v})
+        set_field("apiKey", app_api_key)
+        set_field("baseUrl", base_url_in_docker)
+        set_field("ProwlarrUrl", PROWLARR_URL_IN_DOCKER)
+        return fields
+
+    if existing:
+        app_id = existing.get("id")
+        obj = dict(existing)
+        obj["fields"] = ensure_fields(existing.get("fields"))
+        print(f"[=] App {app_name} exists in Prowlarr (id={app_id}); updating URLs/keys")
+        try:
+            r = http_put_with_retries(f"{PROWLARR_URL}/api/v1/applications/{app_id}",
+                                      headers=headers, json_obj=obj)
+            if r.status_code in (200, 202):
+                print(f"[✔] Updated app {app_name} in Prowlarr (id={app_id})")
+                time.sleep(2)  # small settle
+                return app_id
+            else:
+                print(f"[!] Prowlarr update app {app_name} failed: {r.status_code} {r.text[:300]}")
+                return app_id
+        except Exception as e:
+            print(f"[!] Prowlarr update app {app_name} error: {e}")
+            return app_id
+
+    # Create new if not found
     payload = {
         "name": app_name,
-        "implementation": app_name,  # "Sonarr" or "Radarr"
+        "implementation": app_name,                 # "Sonarr" or "Radarr"
         "configContract": f"{app_name}Settings",
-        "fields": [
-            {"name": "apiKey",      "value": api_key},
-            {"name": "baseUrl",     "value": base_url_in_docker},
-            {"name": "ProwlarrUrl", "value": PROWLARR_URL_IN_DOCKER},
-        ],
+        "fields": ensure_fields([]),
         "enable": True
     }
     url = f"{PROWLARR_URL}/api/v1/applications"
-    print(f"[~] Adding app {app_name} pointing to {base_url_in_docker} with ProwlarrUrl={PROWLARR_URL_IN_DOCKER}")
+    print(f"[~] Adding app {app_name} in Prowlerr pointing to {base_url_in_docker}")
     try:
-        r = post_with_retries(url, headers=prow_headers(), payload=payload, tries=10, delay=3, timeout=15)
+        r = post_with_retries(url, headers=headers, payload=payload,
+                              tries=3, delay=4, timeout=PROWLARR_REQ_TIMEOUT)
         if r.status_code in (200, 201):
-            print(f"[+] Added app {app_name}")
-        elif r.status_code == 409:
-            print(f"[=] App {app_name} already exists (409)")
+            app_id = r.json().get("id")
+            print(f"[✔] Added app {app_name} in Prowlarr (id={app_id})")
+            time.sleep(2)
+            return app_id
+        elif r.status_code == 400 and "Should be unique" in r.text:
+            # Another writer beat us; fetch the existing and continue
+            print(f"[=] App {app_name} already exists in Prowlarr (400 unique); will update instead")
+            apps = prow_get_apps(prowlarr_api_key)
+            existing = next((a for a in apps if a.get("name") == app_name), None)
+            return existing.get("id") if existing else None
         else:
-            print(f"[!] add_app {app_name} failed: {r.status_code} {r.text[:300]}")
+            print(f"[!] Prowlarr add_app {app_name} failed: {r.status_code} {r.text[:300]}")
+            return None
     except Exception as e:
-        print(f"[!] add_app {app_name} error after retries: {e}")
+        print(f"[!] Prowlarr add_app {app_name} error after retries: {e}")
+        return None
 
-def set_app_synclevel_and_sync(app_name: str):
-    apps = requests.get(f"{PROWLARR_URL}/api/v1/applications",
-                        headers=prow_headers(), timeout=10).json()
+def set_app_synclevel_and_sync(app_name: str, api_key: str):
+    headers = {"X-Api-Key": api_key}
+    try:
+        apps = prow_get_apps(api_key)
+    except Exception as e:
+        print(f"[!] Could not list applications: {e}")
+        return
+
+    # Prefer exact implementation match; fall back to name
     app = next((a for a in apps if a.get("implementation") == app_name), None)
+    if not app:
+        app = next((a for a in apps if a.get("name") == app_name), None)
     if not app:
         print(f"[-] {app_name} app not found to set syncLevel")
         return
-    app_id = app.get("id")
 
+    app_id = app.get("id")
     fields = app.get("fields") or []
+    # ensure ProwlarrUrl is set to in-docker URL
     found = False
     for f in fields:
         if f.get("name","").lower() == "prowlarrurl":
@@ -256,39 +962,28 @@ def set_app_synclevel_and_sync(app_name: str):
         obj = dict(app)
         obj["fields"] = fields
         obj["syncLevel"] = full_sync
-        u = requests.put(f"{PROWLARR_URL}/api/v1/applications/{app_id}",
-                         headers=prow_headers(), json=obj, timeout=10)
-        if u.status_code in (200, 202):
-            print(f"[+] Set {app_name} syncLevel to {full_sync}")
-            break
-        else:
-            print(f"[!] PUT syncLevel={full_sync} -> {u.status_code}: {u.text[:300]}")
-
-    try:
-        t = requests.post(f"{PROWLARR_URL}/api/v1/applications/test",
-                          headers=prow_headers(), json=[app_id], timeout=10)
-        print(f"[=] applications/test -> {t.status_code}")
-    except Exception as e:
-        print(f"[!] applications/test error: {e}")
-
-    for action in ("syncindexers", "SyncAppIndexers"):
         try:
-            s = requests.post(f"{PROWLARR_URL}/api/v1/applications/action/{action}",
-                              headers=prow_headers(), json=[app_id], timeout=10)
-            print(f"[=] action/{action} -> {s.status_code}")
-            if s.status_code in (200, 202, 204):
+            u = http_put_with_retries(f"{PROWLARR_URL}/api/v1/applications/{app_id}",
+                                      headers=headers, json_obj=obj,
+                                      tries=5, delay=3, timeout=PROWLARR_REQ_TIMEOUT)
+            if u.status_code in (200, 202):
+                print(f"[✔] Set {app_name} syncLevel to {full_sync}")
                 break
+            else:
+                print(f"[!] PUT syncLevel={full_sync} -> {u.status_code}: {u.reason}: {u.text[:300]}")
         except Exception as e:
-            print(f"[!] action/{action} error: {e}")
+            print(f"[!] PUT syncLevel error: {e}")
 
-def list_tags():
-    r = requests.get(f"{PROWLARR_URL}/api/v1/tag", headers=prow_headers(), timeout=10)
+def list_tags(api_key):
+    headers = {"X-Api-Key": api_key}
+    r = requests.get(f"{PROWLARR_URL}/api/v1/tag", headers=headers, timeout=10)
     r.raise_for_status()
     return r.json()
 
-def ensure_tag_id(label: str) -> int | None:
+def ensure_tag_id(label: str, api_key) -> int | None:
+    headers = {"X-Api-Key": api_key}
     try:
-        tags = list_tags()
+        tags = list_tags(api_key)
         for t in tags:
             if t.get("label") == label:
                 print(f"[=] Tag '{label}' exists (id={t.get('id')})")
@@ -297,12 +992,12 @@ def ensure_tag_id(label: str) -> int | None:
         print(f"[-] Could not list tags: {e}")
     try:
         r = requests.post(f"{PROWLARR_URL}/api/v1/tag",
-                          headers=prow_headers(),
+                          headers=headers,
                           json={"label": label},
                           timeout=10)
         if r.status_code in (200, 201):
             tid = r.json().get("id")
-            print(f"[+] Created tag '{label}' (id={tid})")
+            print(f"[✔] Created tag '{label}' (id={tid})")
             return tid
         else:
             print(f"[-] Create tag '{label}' failed: {r.status_code} {r.text[:300]}")
@@ -310,10 +1005,11 @@ def ensure_tag_id(label: str) -> int | None:
         print(f"[-] Create tag error: {e}")
     return None
 
-def get_proxy_base():
+def get_proxy_base(api_key):
+    headers = {"X-Api-Key": api_key}
     for base in ("/api/v1/indexerproxy", "/api/v1/proxy"):
         try:
-            r = requests.get(f"{PROWLARR_URL}{base}", headers=prow_headers(), timeout=10)
+            r = requests.get(f"{PROWLARR_URL}{base}", headers=headers, timeout=10)
             if r.status_code in (200, 204, 405):
                 print(f"[=] Using proxy endpoint base: {base}")
                 return base
@@ -322,8 +1018,9 @@ def get_proxy_base():
     print("[-] Could not determine proxy endpoint base. Fallback: /api/v1/indexerproxy")
     return "/api/v1/indexerproxy"
 
-def list_proxies(proxy_base):
-    r = requests.get(f"{PROWLARR_URL}{proxy_base}", headers=prow_headers(), timeout=15)
+def list_proxies(proxy_base, api_key):
+    headers = {"X-Api-Key": api_key}
+    r = requests.get(f"{PROWLARR_URL}{proxy_base}", headers=headers, timeout=15)
     if r.status_code != 200:
         print(f"[-] list_proxies {proxy_base} status {r.status_code}: {r.text[:200]}")
         return None
@@ -333,15 +1030,16 @@ def list_proxies(proxy_base):
         print(f"[-] list_proxies JSON error: {e}; body: {r.text[:200]}")
         return None
 
-def create_proxy_if_needed():
+def create_proxy_if_needed(api_key):
+    headers = {"X-Api-Key": api_key}
     if not CREATE_PROXY:
         print("[=] Proxy creation disabled (CREATE_PROXY=false)")
         return None
 
-    proxy_base = get_proxy_base()
-    tag_id = ensure_tag_id(CF_TAG_LABEL)
+    proxy_base = get_proxy_base(api_key)
+    tag_id = ensure_tag_id(CF_TAG_LABEL, api_key)
 
-    existing = list_proxies(proxy_base)
+    existing = list_proxies(proxy_base, api_key)
     if isinstance(existing, list):
         for p in existing:
             if p.get("name") == FSR_NAME and (p.get("implementation") in ("FlareSolverr", "FLARESOLVERR")):
@@ -362,24 +1060,25 @@ def create_proxy_if_needed():
     }
 
     url = f"{PROWLARR_URL}{proxy_base}"
-    r = requests.post(url, headers=prow_headers(), json=payload, timeout=20)
-    if r.status_code in (200, 201):
-        pid = r.json().get("id")
-        print(f"[+] Created proxy '{FSR_NAME}' (id={pid}) at {proxy_base}")
+    r1 = requests.post(url, headers=headers, json=payload, timeout=20)
+    if r1.status_code in (200, 201):
+        pid = r1.json().get("id")
+        print(f"[✔] Created proxy '{FSR_NAME}' (id={pid}) at {proxy_base}")
+        time.sleep(5)
         return pid
 
     alt_base = "/api/v1/proxy" if proxy_base.endswith("indexerproxy") else "/api/v1/indexerproxy"
     print(f"[!] POST {proxy_base} -> {r.status_code}. Trying {alt_base}...")
-    r2 = requests.post(f"{PROWLARR_URL}{alt_base}", headers=prow_headers(), json=payload, timeout=20)
+    r2 = requests.post(f"{PROWLARR_URL}{alt_base}", headers=headers, json=payload, timeout=20)
     if r2.status_code in (200, 201):
         pid = r2.json().get("id")
-        print(f"[+] Created proxy '{FSR_NAME}' (id={pid}) at {alt_base}")
+        print(f"[✔] Created proxy '{FSR_NAME}' (id={pid}) at {alt_base}")
+        time.sleep(5)
         return pid
 
     print(f"[-] Proxy create failed. {proxy_base} -> {r.status_code} {r.text[:300]}  |  {alt_base} -> {r2.status_code} {r2.text[:300]}")
     return None
 
-# ----- Indexers (torrent + usenet) -----
 def _canon(s: str) -> str:
     return "".join(ch.lower() for ch in (s or "") if ch.isalnum())
 
@@ -444,64 +1143,95 @@ def _create_indexer_payload_from_def(defn: dict, tag_id: int | None,
         "supportsSearch": True,
         "enableRss": True,
         "enableSearch": True,
-        "useProxy": bool(proxy_id) and use_proxy,
         "fields": []
     }
-    overrides = _collect_overrides_for(defn)
-    payload["fields"] = _build_fields_with_overrides(defn, overrides)
-    if proxy_id and use_proxy:
+    use_proxy_flag = use_proxy and not _is_usenet(defn)
+    payload["useProxy"] = use_proxy_flag
+    if proxy_id and use_proxy_flag:
         payload["proxy"] = proxy_id
         payload["proxyId"] = proxy_id
+
+    overrides = _collect_overrides_for(defn)
+    payload["fields"] = _build_fields_with_overrides(defn, overrides)
     return payload
 
-def get_indexer_definitions():
+def get_indexer_definitions(api_key):
+    headers = {"X-Api-Key": api_key}
     print("[~] Fetching indexer definitions")
-    r = requests.get(f"{PROWLARR_URL}/api/v1/indexer/schema", headers=prow_headers(), timeout=20)
+    r = requests.get(f"{PROWLARR_URL}/api/v1/indexer/schema", headers=headers, timeout=20)
     r.raise_for_status()
     return r.json()
 
-def create_indexer_with_optional_proxy(defs, name: str, proxy_id: int | None):
+def create_indexer_with_optional_proxy(defs, name: str, proxy_id: int | None, api_key):
+    headers = {"X-Api-Key": api_key}
     wanted = _canon(name)
-    match = next((
-        d for d in defs
-        if _canon(d.get("name","")) == wanted
-        or _canon(d.get("implementationName","")) == wanted
-    ), None)
-
+    match = next((d for d in defs if _canon(d.get("name","")) == wanted
+                               or _canon(d.get("implementationName","")) == wanted), None)
     if not match:
-        candidates = [
-            d for d in defs
-            if wanted in _canon(d.get("name","")) or wanted in _canon(d.get("implementationName",""))
-            or _canon(d.get("name","")) in wanted or _canon(d.get("implementationName","")) in wanted
-        ]
-        if len(candidates) == 1:
-            match = candidates[0]
-        elif candidates:
-            print(f"[~] Multiple close matches for '{name}':")
-            for d in candidates[:10]:
-                print(f"    - {d.get('name')} (impl={d.get('implementationName')})")
-            match = candidates[0]
-
-    if not match:
-        print(f"[-] No definition found for '{name}'.")
-        return
-
-    tag_id = ensure_tag_id(CF_TAG_LABEL)
-    payload = _create_indexer_payload_from_def(match, tag_id, proxy_id, use_proxy=True)
+        cands = [d for d in defs if wanted in _canon(d.get("name","")) or wanted in _canon(d.get("implementationName",""))]
+        if not cands:
+            print(f"[-] No definition found for '{name}'.")
+            return
+        match = cands[0]
 
     try:
-        r = requests.post(f"{PROWLARR_URL}/api/v1/indexer", headers=prow_headers(), json=payload, timeout=25)
+        existing = prow_get_indexers(api_key)
+    except Exception as e:
+        print(f"[!] Could not list indexers: {e}")
+        existing = []
+
+    intended_name = match.get("name") or match.get("implementationName") or name
+    current = next((i for i in existing if _norm(i.get("name")) == _norm(intended_name)), None)
+
+    tag_id = ensure_tag_id(CF_TAG_LABEL, api_key)
+    overrides = _collect_overrides_for(match)
+    new_fields = _build_fields_with_overrides(match, overrides)
+
+    use_proxy_flag = (not _is_usenet(match)) and bool(proxy_id)
+
+    if current:
+        obj = dict(current)
+        obj["tags"] = [tag_id] if tag_id is not None else (obj.get("tags") or [])
+        obj["useProxy"] = use_proxy_flag
+        if use_proxy_flag:
+            obj["proxy"] = proxy_id
+            obj["proxyId"] = proxy_id
+        obj["fields"] = _merge_fields(current.get("fields"), new_fields)
+
+        try:
+            u = http_put_with_retries(f"{PROWLARR_URL}/api/v1/indexer/{current.get('id')}",
+                                      headers=headers, json_obj=obj)
+            if u.status_code in (200, 202):
+                print(f"[=] Indexer '{intended_name}' exists; updated settings.")
+            else:
+                print(f"[!] Update indexer '{intended_name}' -> {u.status_code} {u.text[:300]}")
+        except Exception as e:
+            print(f"[!] Update indexer '{intended_name}' error: {e}")
+        return
+
+    payload = _create_indexer_payload_from_def(match, tag_id, proxy_id, use_proxy=not _is_usenet(match))
+    try:
+        r = post_with_retries(f"{PROWLARR_URL}/api/v1/indexer", headers=headers, payload=payload,
+                              tries=3, delay=6, timeout=PROWLARR_REQ_TIMEOUT)
         if r.status_code in (200, 201):
             idx_id = r.json().get("id")
             proto = (match.get("protocol") or "").lower()
-            print(f"[+] Created indexer '{name}' (id={idx_id}, protocol={proto})")
+            print(f"[✔] Created indexer '{intended_name}' (id={idx_id}, protocol={proto})")
+        elif r.status_code == 400 and "Should be unique" in r.text:
+            print(f"[=] Indexer '{intended_name}' already exists; will update instead.")
+            try:
+                ex = prow_get_indexers(api_key)
+                cur = next((i for i in ex if _norm(i.get("name")) == _norm(intended_name)), None)
+                if cur:
+                    # fall into update path by recursion
+                    create_indexer_with_optional_proxy(defs, intended_name, proxy_id)
+            except Exception:
+                pass
         else:
-            print(f"[!] Failed creating indexer '{name}': {r.status_code} {r.text[:400]}")
+            print(f"[!] Failed creating indexer '{intended_name}': {r.status_code} {r.text[:400]}")
     except Exception as e:
-        print(f"[!] Exception creating indexer '{name}': {e}")
+        print(f"[!] Exception creating indexer '{intended_name}': {e}")
 
-# ---------------------------
-# qBittorrent: temp password → login → (optional) set known password
 def get_qbt_temp_password(container: str) -> str | None:
     try:
         out = subprocess.run(
@@ -522,7 +1252,7 @@ def get_qbt_temp_password(container: str) -> str | None:
         m = re.search(pat, out, flags=re.IGNORECASE)
         if m:
             pw = m.group(1).strip()
-            print(f"[+] Found temp qBittorrent password in logs: {pw}")
+            print(f"[✔] Found temp qBittorrent password in logs: {pw}")
             return pw
     print("[~] No temp password found in logs (maybe already configured).")
     return None
@@ -557,7 +1287,7 @@ def qbt_set_preferences(sess: requests.Session, base: str, prefs: dict) -> bool:
 def prepare_qbt_via_api() -> tuple[str, str] | tuple[None, None]:
     """Return (username, password) to use for *Arr download client."""
     # Make sure qB API is up (host-mapped)
-    if not wait_for_http(QBT_API_BASE, QBT_API_WAIT_TIMEOUT):
+    if not wait_for_http(QBT_API_BASE, QBT_API_WAIT_TIMEOUT, 'qBittorrent'):
         print(f"[-] qBittorrent API not reachable at {QBT_API_BASE}")
         return (None, None)
 
@@ -577,7 +1307,7 @@ def prepare_qbt_via_api() -> tuple[str, str] | tuple[None, None]:
         if QBT_SET_KNOWN_CREDS and UI_PASS:
             creds_prefs = {"web_ui_username": UI_USER, "web_ui_password": UI_PASS}
             if qbt_set_preferences(sess, QBT_API_BASE, creds_prefs):
-                print("[+] Set known qBittorrent credentials via API")
+                print("[✔] Set known qBittorrent credentials via API")
                 return (UI_USER, UI_PASS)
             else:
                 print("[!] Failed setting known qBittorrent credentials; using temp password")
@@ -589,8 +1319,6 @@ def prepare_qbt_via_api() -> tuple[str, str] | tuple[None, None]:
     # No temp, but the user provided a new pass — just return those
     return (UI_USER, UI_PASS)
 
-# ---------------------------
-# Add qBittorrent to Sonarr/Radarr
 def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
                               host="gluetun", port=8080,
                               username="", password="",
@@ -631,7 +1359,7 @@ def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
     try:
         r = requests.post(f"{app_url}/api/v3/downloadclient", headers=headers, json=payload, timeout=15)
         if r.status_code in (200, 201):
-            print(f"[+] Added qBittorrent to {app_url}")
+            print(f"[✔] Added qBittorrent to {app_url}")
         elif r.status_code == 409:
             print(f"[=] qBittorrent already exists in {app_url}")
         else:
@@ -639,7 +1367,6 @@ def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
     except Exception as e:
         print(f"[!] Exception adding qBittorrent to {app_url}: {e}")
 
-# Add SAB to Sonarr/Radarr
 def ensure_sab_client(app_url, api_key, name="sabnzbd",
                       host="sabnzbd", port=8080,
                       sab_api_key="", category=None, use_ssl=False,
@@ -735,7 +1462,7 @@ def ensure_sab_client(app_url, api_key, name="sabnzbd",
 
     r = requests.post(f"{app_url}/api/v3/downloadclient", headers=headers, json=payload, timeout=15)
     if r.status_code in (200, 201):
-        print(f"[+] Added SABnzbd to {app_url}")
+        print(f"[✔] Added SABnzbd to {app_url}")
         return True
     elif r.status_code == 409:
         print(f"[=] SABnzbd already exists in {app_url}")
@@ -744,53 +1471,101 @@ def ensure_sab_client(app_url, api_key, name="sabnzbd",
         print(f"[!] Failed to add SABnzbd to {app_url}: {r.status_code} {r.text}")
         return False
 
+def qbt_ensure_paths(base: str, username: str, password: str,
+                     completed=COMPLETED_DOWNLOADS, incomplete=INCOMPLETE_DOWNLOADS) -> bool:
+    """
+    Set global completed & incomplete download dirs in qBittorrent.
+    Works on qB 4.1+.
+    """
+    sess = qbt_login_session(base, username, password)
+    if not sess:
+        print("[-] qB login failed; cannot set paths")
+        return False
+
+    prefs = {
+        # Completed path
+        "save_path": completed,
+        # Incomplete path
+        "temp_path_enabled": True,   # modern key
+        "temp_path": incomplete,
+        "use_temp_path": True,       # legacy toggle (harmless if ignored)
+        # Optional quality-of-life:
+        # "create_subfolder_enabled": False,           # don’t create per-torrent subfolder
+        # "append_extension_enabled": True, "append_extension": ".!qB"
+    }
+    ok = qbt_set_preferences(sess, base, prefs)
+    print(("[+]" if ok else "[=]") + f" qB global paths set: complete={completed}, incomplete={incomplete}")
+    return ok
+
+
+def qbt_ensure_categories(base: str, username: str, password: str, mapping: dict[str, str]) -> None:
+    sess = qbt_login_session(base, username, password)
+    if not sess:
+        print("[-] qB login failed with temp password. Trying UI credentials")
+        sess = qbt_login_session(base, UI_USER, UI_PASS)
+        if not sess:
+            print("[-] qB login failed; cannot set categories")
+            return
+
+    # list existing categories
+    try:
+        r = sess.get(f"{base}/api/v2/torrents/categories", timeout=10)
+        r.raise_for_status()
+        cats = r.json()  # { "name": {"name": "...", "savePath": "..."} }
+    except Exception as e:
+        print(f"[!] Could not list qB categories: {e}")
+        cats = {}
+
+    for name, save_path in mapping.items():
+        cur = cats.get(name)
+        if not cur:
+            # create
+            try:
+                cr = sess.post(f"{base}/api/v2/torrents/createCategory",
+                               data={"category": name, "savePath": save_path}, timeout=10)
+                print(f"[+] Created qB category '{name}' -> {save_path} (status {cr.status_code})")
+            except Exception as e:
+                print(f"[!] Create category '{name}' failed: {e}")
+        elif cur.get("savePath") != save_path:
+            # edit
+            try:
+                er = sess.post(f"{base}/api/v2/torrents/editCategory",
+                               data={"category": name, "savePath": save_path}, timeout=10)
+                print(f"[+] Updated qB category '{name}' -> {save_path} (status {er.status_code})")
+            except Exception as e:
+                print(f"[!] Edit category '{name}' failed: {e}")
+        else:
+            print(f"[=] qB category '{name}' already set to {save_path}")
+
+
 # ---------------------------
 def main():
-    # Ensure qB WebUI is reachable (host-mapped port)
-    wait_for_http(QBT_API_BASE, QBT_API_WAIT_TIMEOUT)
+    # Wait for apps requiring config to start
+    wait_for_http(RADARR_URL, QBT_API_WAIT_TIMEOUT, 'Radarr')
+    wait_for_http(SONARR_URL, QBT_API_WAIT_TIMEOUT, 'Sonarr')
+    wait_for_http(PROWLARR_URL, QBT_API_WAIT_TIMEOUT, 'Prowlarr')
+    wait_for_http(QBT_API_BASE, QBT_API_WAIT_TIMEOUT, 'qBittorrent')
 
-    # Ensure *Arr/Prowlarr are up
-    if not wait_for_http(PROWLARR_URL, WAIT_TIMEOUT): exit(1)
-    if not wait_for_http(SONARR_URL, WAIT_TIMEOUT): exit(1)
-    if not wait_for_http(RADARR_URL, WAIT_TIMEOUT): exit(1)
-
-    # Read API keys from config if needed
-    ensure_keys()
+    # Read API keys from configs
+    RADARR_API_KEY, SONARR_API_KEY, PROWLARR_API_KEY = get_arr_keys()
     if not (PROWLARR_API_KEY and SONARR_API_KEY and RADARR_API_KEY):
         print("[-] Missing API keys; ensure apps initialized or pass via env.")
         exit(1)
 
-    # (Optional) Set web auth on *Arr
-    sonarr_auth_ok = set_arr_auth(SONARR_URL, SONARR_API_KEY, 3, UI_USER, UI_PASS, AUTH_METHOD)
-    radarr_auth_ok = set_arr_auth(RADARR_URL, RADARR_API_KEY, 3, UI_USER, UI_PASS, AUTH_METHOD)
-    prowlarr_auth_ok = set_arr_auth(PROWLARR_URL, PROWLARR_API_KEY, 1, UI_USER, UI_PASS, AUTH_METHOD)
+    # Update Sonarr and Radarr so they do not auto-update
+    set_arr_updates_to_docker(RADARR_URL, RADARR_API_KEY)
+    set_arr_updates_to_docker(SONARR_URL, SONARR_API_KEY)
 
-    if RESTART_AFTER_AUTH:
-        if sonarr_auth_ok:  restart_arr(SONARR_URL, 3, SONARR_API_KEY)
-        if radarr_auth_ok:  restart_arr(RADARR_URL, 3, RADARR_API_KEY)
-        if prowlarr_auth_ok: restart_arr(PROWLARR_URL, 1, PROWLARR_API_KEY)
-        if prowlarr_auth_ok: wait_for_http(PROWLARR_URL, 180)
-        if sonarr_auth_ok:   wait_for_http(SONARR_URL, 180)
-        if radarr_auth_ok:   wait_for_http(RADARR_URL, 180)
-
-    # Register apps in Prowlarr + set sync level (use in-Docker URLs)
-    add_app("Sonarr", SONARR_URL_IN_DOCKER, SONARR_API_KEY)
-    add_app("Radarr", RADARR_URL_IN_DOCKER, RADARR_API_KEY)
-    set_app_synclevel_and_sync("Sonarr")
-    set_app_synclevel_and_sync("Radarr")
-
-    # Create FlareSolverr proxy (optional) and seed indexers
-    proxy_id = create_proxy_if_needed()
-    defs = get_indexer_definitions()
-    for idx in INDEXERS:
-        create_indexer_with_optional_proxy(defs, idx, proxy_id)
-
-    # qB: login with temp pass and optionally set a known password
+    # Get temp password from QBT in order to login to set updated password
     qbt_user, qbt_pass = prepare_qbt_via_api()
     if not qbt_user and UI_PASS:
         # No temp found; assume new pass is already set
         qbt_user, qbt_pass = (UI_USER, UI_PASS)
 
+    qbt_ensure_paths(QBT_API_BASE, qbt_user, qbt_pass,
+                 completed=COMPLETED_DOWNLOADS,
+                 incomplete=INCOMPLETE_DOWNLOADS)
+    
     # Add qBittorrent to Sonarr/Radarr (containers will reach it at gluetun:8080)
     ensure_qbittorrent_client(
         SONARR_URL, SONARR_API_KEY,
@@ -809,29 +1584,95 @@ def main():
         use_ssl=False
     )
 
+    # Set web auth on *Arr
+    sonarr_auth_ok = set_arr_auth(SONARR_URL, SONARR_API_KEY, 3, UI_USER, UI_PASS, AUTH_METHOD)
+    radarr_auth_ok = set_arr_auth(RADARR_URL, RADARR_API_KEY, 3, UI_USER, UI_PASS, AUTH_METHOD)
+    prowlarr_auth_ok = set_arr_auth(PROWLARR_URL, PROWLARR_API_KEY, 1, UI_USER, UI_PASS, AUTH_METHOD)
+
+    # Register apps in Prowlarr + set sync level (use in-Docker URLs)
+    add_app("Sonarr", SONARR_URL_IN_DOCKER, SONARR_API_KEY, PROWLARR_API_KEY)
+    add_app("Radarr", RADARR_URL_IN_DOCKER, RADARR_API_KEY, PROWLARR_API_KEY)
+    set_app_synclevel_and_sync("Sonarr", PROWLARR_API_KEY)
+    set_app_synclevel_and_sync("Radarr", PROWLARR_API_KEY)
+
+    # Create FlareSolverr proxy (optional) and seed indexers
+    proxy_id = create_proxy_if_needed(PROWLARR_API_KEY)
+    defs = get_indexer_definitions(PROWLARR_API_KEY)
+    for idx in INDEXERS:
+        create_indexer_with_optional_proxy(defs, idx, proxy_id, PROWLARR_API_KEY)
+
+    print(f"[~] Setting Radarr download path to {CONTAINER_MOVIES_DIR}")
+    created_r = ensure_root_folder(RADARR_URL, RADARR_API_KEY, CONTAINER_MOVIES_DIR)
+    print(f"[~] Setting Sonarr download path to {CONTAINER_SHOWS_DIR}")
+    created_s = ensure_root_folder(SONARR_URL, SONARR_API_KEY, CONTAINER_SHOWS_DIR)
+
+    if not (created_r or created_s):
+        print("[i] If you saw 'folder does not exist' or 'not writable', verify volume binds in docker-compose and PUID/PGID.")
+
     # Add SABnzbd to Sonarr/Radarr (containers will reach it at sabnzbd:8080 on media_net container network))
     SABNZBD_API_KEY = ""
     if wait_for_file(SABNZBD_CFG, WAIT_TIMEOUT):
-        SABNZBD_API_KEY = parse_sab_api_key(SABNZBD_CFG)
+        changed_wl = ensure_sab_whitelist(SABNZBD_CFG, SAB_WHITELIST)
+        changed_cat = ensure_sab_categories(SABNZBD_CFG, SAB_CATS)
+        changed_dirs = ensure_sab_folders(SABNZBD_CFG, temp_dir=INCOMPLETE_DOWNLOADS, complete_dir=COMPLETED_DOWNLOADS)
+        if SAB_CONFIG_PROVIDER:
+            changed_lang= ensure_sab_language(SABNZBD_CFG, SAB_LANG)
+            changed_srv = ensure_sab_server(
+                SABNZBD_CFG,
+                name=SAB_SRV_NAME,
+                host=SAB_SRV_HOST,
+                port=SAB_SRV_PORT,
+                ssl=SAB_SRV_SSL,
+                username=SAB_SRV_USER,
+                password=SAB_SRV_PASS,
+                connections=SAB_SRV_CONNS,
+                priority=SAB_SRV_PRIORITY)
+        if changed_wl or changed_cat or changed_dirs or (SAB_CONFIG_PROVIDER and (changed_lang or changed_srv)):
+            restart_container(SABNZBD_CONTAINER)
+            if not wait_for_container_ready(SABNZBD_CONTAINER, port=SAB_HTTP_PORT, timeout=180):
+                time.sleep(8)
+        SABNZBD_API_KEY = parse_sab_api_key(SABNZBD_CFG) or ""
+    else:
+        print("[-] SAB config file not found; skipping SAB setup.")
 
     if SABNZBD_API_KEY:
-        # SAB runs on media_net, exposed as sabnzbd:8080 to other containers
-        ensure_sab_client(
+        ok1 = ensure_sab_client(
             SONARR_URL, SONARR_API_KEY,
             host="sabnzbd", port=8080,
             sab_api_key=SABNZBD_API_KEY,
-            category="tv",     # matches SAB category you created
-            use_ssl=False      # set True if you switch SAB UI to HTTPS
+            category="tv",
+            use_ssl=False
         )
-        ensure_sab_client(
+        ok2 = ensure_sab_client(
             RADARR_URL, RADARR_API_KEY,
             host="sabnzbd", port=8080,
             sab_api_key=SABNZBD_API_KEY,
             category="movies",
             use_ssl=False
         )
+        if not (ok1 and ok2):
+            print("[~] SAB add failed at first attempt; re-checking categories and retrying once...")
+            ensure_sab_categories(SABNZBD_CFG, SAB_CATS)
+            time.sleep(3)
+            ensure_sab_client(SONARR_URL, SONARR_API_KEY, host="sabnzbd", port=8080,
+                              sab_api_key=SABNZBD_API_KEY, category="tv", use_ssl=False)
+            ensure_sab_client(RADARR_URL, RADARR_API_KEY, host="sabnzbd", port=8080,
+                              sab_api_key=SABNZBD_API_KEY, category="movies", use_ssl=False)
     else:
         print("[-] SABNZBD_API_KEY missing; skip adding SAB client.")
+
+    set_prowlarr_indexer_priorities(usenet_prio=10, torrent_prio=30, api_key=PROWLARR_API_KEY)
+    prefer_usenet_in_arr(SONARR_URL, SONARR_API_KEY)
+    prefer_usenet_in_arr(RADARR_URL, RADARR_API_KEY)
+    set_download_client_priorities(SONARR_URL, SONARR_API_KEY, sab_first=True)
+    set_download_client_priorities(RADARR_URL, RADARR_API_KEY, sab_first=True)
+
+    restart_container(SONARR_CONTAINER)
+    restart_container(RADARR_CONTAINER)
+    restart_container(PROWLARR_CONTAINER)
+    wait_for_http(SONARR_URL, 180, 'Sonarr')
+    wait_for_http(RADARR_URL, 180, 'Radarr')
+    wait_for_http(PROWLARR_URL, 180, 'Prowlarr')
 
     print("[✓] Bootstrap complete")
 
