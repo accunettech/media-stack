@@ -147,6 +147,12 @@ services:
     volumes:
       - ${CONF_HOME}/sabnzbd:/config
       - ${DOWNLOADS_DIR}:/downloads
+    healthcheck:
+      test: ["CMD", "sh", "-lc", "curl -fsS http://localhost:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     restart: unless-stopped
 
   # --- Auto-restart unhealthy containers (uses labels) ---
