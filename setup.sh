@@ -16,6 +16,8 @@ set -a; source .env; set +a
 OWNER="${SUDO_USER:-$USER}"
 export OWNER_UID="$(id -u "$OWNER")"
 export OWNER_GID="$(id -g "$OWNER")"
+export RENDER_GID="$(stat -c '%g' /dev/dri/renderD128 || echo 0)"
+export VIDEO_GID="$(stat -c '%g' /dev/dri/card0 || echo 0)"
 
 require_sudo() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
