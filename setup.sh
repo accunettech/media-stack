@@ -259,5 +259,11 @@ echo
 echo
 echo "✅ Setup complete."
 echo
-echo "Be sure to checkout README.md for additional setup info and app URLs!"
-echo
+echo "Be sure to checkout README.md for additional setup info!"
+echo "URLs:"
+echo "  - Radarr: http://$HOSTNAME:7878"
+echo "  - Sonarr: http://$HOSTNAME:8989"
+echo "  - Jellyfin: http://$HOSTNAME:8096"
+echo "  - Prowlarr: http://$HOSTNAME:9696"
+echo "  - qBittorrent: http://$HOSTNAME:8080"
+echo "  - SABnzbd: http://$HOSTNAME:8081"
