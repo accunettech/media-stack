@@ -211,10 +211,12 @@ mkdir -p $MEDIA_DIR
 mkdir -p $MOVIES_DIR
 mkdir -p $SHOWS_DIR
 mkdir -p $DOWNLOADS_DIR
+echo "Building and starting containers..."
 echo
 docker compose up -d
 echo
 echo "Configuring stack..."
+source .venv/bin/activate
 python scripts/config_stack.py
 echo
 echo
