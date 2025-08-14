@@ -326,7 +326,7 @@ def set_download_client_priorities(app_url, api_key, sab_first=True):
     else:
         print(f"[=] Download client priorities already correct in {app_url}")
 
-def smart_protocol_tuning(app_url, api_key, sab_first=True):
+def smart_protocol_tuning(app_url, api_key, prowlarr_api_key, sab_first=True):
     """
     If the app has a Usenet indexer: prefer Usenet and delay torrents.
     If not: prefer Torrent and set *no* delays.
@@ -334,7 +334,7 @@ def smart_protocol_tuning(app_url, api_key, sab_first=True):
     import requests
     H = {"X-Api-Key": api_key, "Content-Type": "application/json"}
 
-    has_usenet = app_has_usenet_indexer(app_url, api_key)
+    has_usenet = prowlarr_has_usenet_indexer(prowlarr_api_key)
 
     if has_usenet:
         # Usenet present → prefer it + delay torrents (e.g. 5 min)
@@ -1402,6 +1402,15 @@ def create_indexer_with_optional_proxy(defs, name: str, proxy_id: int | None, ap
     except Exception as e:
         print(f"[!] Exception creating indexer '{intended_name}': {e}")
 
+def prowlarr_has_usenet_indexer(api_key: str) -> bool:
+    """Return True if Prowlarr has any enabled Usenet indexer."""
+    try:
+        idxs = prow_get_indexers(api_key)
+    except Exception:
+        return False
+    return any((i.get("enable") is True) and (str(i.get("protocol","")).lower() == "usenet")
+               for i in (idxs or []))
+
 def get_qbt_temp_password(container: str) -> str | None:
     try:
         out = subprocess.run(
@@ -1832,8 +1841,8 @@ def main():
         print("[-] SABNZBD_API_KEY missing; skip adding SAB client.")
 
     set_prowlarr_indexer_priorities(usenet_prio=10, torrent_prio=30, api_key=PROWLARR_API_KEY)
-    smart_protocol_tuning(RADARR_URL, RADARR_API_KEY)
-    smart_protocol_tuning(SONARR_URL, SONARR_API_KEY)
+    smart_protocol_tuning(RADARR_URL, RADARR_API_KEY, PROWLARR_API_KEY)
+    smart_protocol_tuning(SONARR_URL, SONARR_API_KEY, PROWLARR_API_KEY)
 
     restart_container(SONARR_CONTAINER)
     restart_container(RADARR_CONTAINER)
