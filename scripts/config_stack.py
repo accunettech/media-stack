@@ -1238,7 +1238,7 @@ def create_proxy_if_needed(api_key):
         return pid
 
     alt_base = "/api/v1/proxy" if proxy_base.endswith("indexerproxy") else "/api/v1/indexerproxy"
-    print(f"[!] POST {proxy_base} -> {r.status_code}. Trying {alt_base}...")
+    print(f"[!] POST {proxy_base} -> {r1.status_code}. Trying {alt_base}...")
     r2 = requests.post(f"{PROWLARR_URL}{alt_base}", headers=headers, json=payload, timeout=20)
     if r2.status_code in (200, 201):
         pid = r2.json().get("id")
@@ -1394,7 +1394,7 @@ def create_indexer_with_optional_proxy(defs, name: str, proxy_id: int | None, ap
                 cur = next((i for i in ex if _norm(i.get("name")) == _norm(intended_name)), None)
                 if cur:
                     # fall into update path by recursion
-                    create_indexer_with_optional_proxy(defs, intended_name, proxy_id)
+                    create_indexer_with_optional_proxy(defs, intended_name, proxy_id, api_key)
             except Exception:
                 pass
         else:
