@@ -1,9 +1,9 @@
 # media-stack
 
 ### Installation
-1. Modify .env
-2. Modify docker-compose.yaml if host device supports hardware acceleration (GPU onboard) ** See performance notes below
-3. Run setup.sh
+1. Modify `.env`
+2. Modify `docker-compose.yaml` if host device supports hardware acceleration (GPU onboard) ** See performance notes below
+3. Run `./setup.sh`
 
 ************
 
