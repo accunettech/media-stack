@@ -5,7 +5,9 @@
 2. Modify docker-compose.yaml if host device supports hardware acceleration (GPU onboard) ** See performance notes below
 3. Run setup.sh
 
-###########################
+############
+### Features
+############
 
 - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
 - Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env, except for Jellyfin, which you must complete startup wizard on first access
@@ -15,7 +17,6 @@
 - On initial access of Jellyfin UI (see Jellyfin URL below), you will be pushed through setup wizard. When at the step, add Movies lib pointing at /media/movies and a Shows lib pointing at /media/shows.
 - User Radarr to search for and download movies and Sonarr to search for and download shows. They will be placed in the correct spot and appear in Jellyfin once they are downloaded and processed.
 - SABnzbd downloader is installed and configured automatically. If Usenet server was not specified in .env and setup during bootstrap, you must add it manually when you subscribe to a service. This is done in SABnzd UI (see SABnzbd URL below) in Settings > Servers > Add Server
-
 
 ******************
 ### PERFORMANCE NOTES:
