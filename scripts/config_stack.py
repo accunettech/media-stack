@@ -1246,7 +1246,7 @@ def create_proxy_if_needed(api_key):
         time.sleep(5)
         return pid
 
-    print(f"[-] Proxy create failed. {proxy_base} -> {r.status_code} {r.text[:300]}  |  {alt_base} -> {r2.status_code} {r2.text[:300]}")
+    print(f"[-] Proxy create failed. {proxy_base} -> {r2.status_code} {r2.text[:300]}  |  {alt_base} -> {r2.status_code} {r2.text[:300]}")
     return None
 
 def _canon(s: str) -> str:
