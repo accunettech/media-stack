@@ -4,26 +4,6 @@ set -euo pipefail
 have() { command -v "$1" >/dev/null 2>&1; }
 is_wsl() { grep -qiE '(microsoft|wsl)' /proc/version 2>/dev/null || return 1; }
 
-[[ -f .env ]] || { echo "Error: .env not found" >&2; exit 1; }
-set -a; source .env; set +a
-
-: "${CONTAINER_HOME:?Missing CONTAINER_HOME}"
-: "${MEDIA_DIR:?Missing MEDIA_DIR}"
-: "${MOVIES_DIR:?Missing MOVIES_DIR}"
-: "${SHOWS_DIR:?Missing SHOWS_DIR}"
-: "${DOWNLOADS_DIR:?Missing DOWNLOADS_DIR}"
-
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
-if [[ "$CONTAINER_HOME" != "$SCRIPT_DIR" ]]; then
-  echo "CONTAINER_HOME should be in the same directory as this script: $SCRIPT_HOME"
-  exit 1
-fi
-
-OWNER_UID="$(id -u)"
-OWNER_GID="$(id -g)"
-RENDER_GID="$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")"
-VIDEO_GID="$(getent group video 2>/dev/null | cut -d: -f3 || echo "")"
-
 upsert_env() {
   local key="$1" val="$2"
   # portable awk update-or-append
@@ -35,11 +15,10 @@ upsert_env() {
   ' .env > .env.tmp && mv .env.tmp .env
 }
 
-upsert_env OWNER_UID "$OWNER_UID"
-upsert_env OWNER_GID "$OWNER_GID"
-
-[[ -n "$RENDER_GID" ]] && upsert_env RENDER_GID "$RENDER_GID"
-[[ -n "$VIDEO_GID"  ]] && upsert_env VIDEO_GID  "$VIDEO_GID"
+ensure_dir_rw() {
+  local d="$1"
+  sudo install -d -m 775 -o "${OWNER_UID}" -g "${OWNER_GID}" "$d"
+}
 
 require_sudo() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -180,8 +159,34 @@ bootstrap_python_venv() {
 
 # ---------------------------
 # Main
+
+[[ -f .env ]] || { echo "Error: .env not found" >&2; exit 1; }
+set -a; source .env; set +a
+
+: "${CONTAINER_HOME:?Missing CONTAINER_HOME}"
+: "${MEDIA_DIR:?Missing MEDIA_DIR}"
+: "${MOVIES_DIR:?Missing MOVIES_DIR}"
+: "${SHOWS_DIR:?Missing SHOWS_DIR}"
+: "${DOWNLOADS_DIR:?Missing DOWNLOADS_DIR}"
+
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+if [[ "$CONTAINER_HOME" != "$SCRIPT_DIR" ]]; then
+  echo "CONTAINER_HOME should be in the same directory as this script: $SCRIPT_HOME"
+  exit 1
+fi
+
+OWNER_UID="$(id -u)"
+OWNER_GID="$(id -g)"
+RENDER_GID="$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")"
+VIDEO_GID="$(getent group video 2>/dev/null | cut -d: -f3 || echo "")"
 OS="$(uname -s)"
 require_sudo
+
+upsert_env OWNER_UID "$OWNER_UID"
+upsert_env OWNER_GID "$OWNER_GID"
+
+[[ -n "$RENDER_GID" ]] && upsert_env RENDER_GID "$RENDER_GID"
+[[ -n "$VIDEO_GID"  ]] && upsert_env VIDEO_GID  "$VIDEO_GID"
 
 # Warn about WSL
 if [[ "$OS" == "Linux" ]] && is_wsl; then
@@ -239,8 +244,10 @@ bootstrap_python_venv
 echo
 echo "Creating config directories..."
 source .env
-mkdir -p $CONF_HOME/{gluetun,qbittorrent,jellyfin,sonarr,radarr,prowlarr}
+mkdir -p $CONF_HOME/{gluetun,qbittorrent,jellyfin/config,jellyfin/cache,sonarr,radarr,prowlarr}
 sudo mkdir -p -- "$MEDIA_DIR" "$MOVIES_DIR" "$SHOWS_DIR" "$DOWNLOADS_DIR" && sudo chown -R "$OWNER_UID:$OWNER_GID" -- "$MEDIA_DIR" "$MOVIES_DIR" "$SHOWS_DIR" "$DOWNLOADS_DIR"
+ensure_dir_rw "${CONF_HOME}/jellyfin/config"
+ensure_dir_rw "${CONF_HOME}/jellyfin/cache"
 echo "Building and starting containers..."
 echo
 docker compose up -d
@@ -252,36 +259,5 @@ echo
 echo
 echo "✅ Setup complete."
 echo
-cat << EOF
-Notes:
-    - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
-    - Make sure media directory specified in .env exists and containers have permission to the file system
-    - Make sure there is a downloads subdirectory in media directory for qBittorrent and SABnzbd.
-    - See URLs for each app in stack below and double check the items under each.
-    - Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env
-
-App access and config tips
-    qBittorrent: http://$HOSTNAME:8080/
-
-    Sonarr: http://$HOSTNAME:8989/
-        Root folder: /shows
-        Download client category: sonarr
-        Completed Download Handling: enabled
-        Set priority of Usenet indexers higher (lower number) to favor Usenet
-
-    Radarr: http://$HOSTNAME:7878/
-        Root folder: /movies
-        Download client category: radarr
-        Completed Download Handling: enabled
-        Set priority of Usenet indexers higher (lower number) to favor Usenet
-
-    Jellyfin: http://$HOSTNAME:8096/
-        Libraries: Movies → /media/movies, Shows → /media/shows
-        Hardware Transcoding: enable VAAPI and select /dev/dri/renderD128 (if using device that support VAAPI)
-
-    Prowlarr: http://$HOSTNAME:9696/
-        If using usenet, set priority low and set torrent indexers high
-
-    sabnzbd: http://$HOSTNAME:8081/
-        Setup Downloader with API key (from sabnzbd setup) in Sanarr and Radarr if Usenet will be used
-EOF
+echo "Be sure to checkout README.md for additional setup info and app URLs!"
+echo
