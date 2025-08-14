@@ -1,6 +1,11 @@
+# media-stack
+
+### Installation
 1. Modify .env
 2. Modify docker-compose.yaml if host device supports hardware acceleration (GPU onboard) ** See performance notes below
 3. Run setup.sh
+
+###########################
 
 - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
 - Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env, except for Jellyfin, which you must complete startup wizard on first access
@@ -13,7 +18,7 @@
 
 
 ******************
-PERFORMANCE NOTES:
+### PERFORMANCE NOTES:
 ******************
 It is highly recommended to run the media server on a device with a GPU. Barebones suggestion that has been tested is an Intel N100 Mini PC running Ubuntu Linux. Without, there may be playback issues if a DV WebDL movie is downloaded (common these days) and the device being streamed to only supports SDR. CPU likely will not be able to handle the load. If running on a device like a raspberry pi, it's best to add TRaSH custom formats in Radarr to block DV (WEBDL) downloads from being processed and added to the library. That reduces how often tone-mapping is required in down-conversion during transcoding.
 
@@ -25,11 +30,11 @@ If hosting on an N100 Mini PC, the following changes should be made in Jellyfin 
 
 
 *****
-URLs:
+### URLs:
 *****
-Radarr: http://{docker-host}:7878
-Sonarr: http://{docker-host}:8989
-Jellyfin: http://{docker-host}:8096
-Prowlarr: http://{docker-host}:9696/
-qBittorrent: http://{docker-host}:8080/
-SABnzbd: http://{docker-host}:8081/
+- Radarr: http://{docker-host}:7878
+- Sonarr: http://{docker-host}:8989
+- Jellyfin: http://{docker-host}:8096
+- Prowlarr: http://{docker-host}:9696/
+- qBittorrent: http://{docker-host}:8080/
+- SABnzbd: http://{docker-host}:8081/
