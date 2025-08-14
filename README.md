@@ -16,6 +16,7 @@
 - User Radarr to search for and download movies and Sonarr to search for and download shows. They will be placed in the correct spot and appear in Jellyfin once they are downloaded and processed.
 - SABnzbd downloader is installed and configured automatically. If Usenet server was not specified in .env and setup during bootstrap, you must add it manually when you subscribe to a service. This is done in SABnzd UI (see SABnzbd URL below) in Settings > Servers > Add Server
 
+
 ******************
 ### Performance Notes
 ******************
@@ -27,9 +28,10 @@ If hosting on an N100 Mini PC, the following changes should be made in Jellyfin 
 - Enable Prefer OS native DXVA or VA-API hardware decoders
 - Enable hardware encoding
 
-*****
+
+************
 ### URLs
-*****
+************
 - Radarr: http://{docker-host}:7878
 - Sonarr: http://{docker-host}:8989
 - Jellyfin: http://{docker-host}:8096
