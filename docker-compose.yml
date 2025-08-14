@@ -45,8 +45,8 @@ services:
       gluetun:
         condition: service_healthy
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
       - TZ=America/Detroit
       - WEBUI_PORT=8080
     volumes:
@@ -83,8 +83,8 @@ services:
     container_name: sonarr
     networks: [media_net]
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
       - TZ=America/Detroit
     ports:
       - "8989:8989"
@@ -99,8 +99,8 @@ services:
     container_name: radarr
     networks: [media_net]
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
       - TZ=America/Detroit
     ports:
       - "7878:7878"
@@ -126,8 +126,8 @@ services:
     container_name: prowlarr
     networks: [media_net]
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
       - TZ=America/Detroit
     ports:
       - "9696:9696"
@@ -140,8 +140,8 @@ services:
     container_name: sabnzbd
     networks: [media_net]
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
       - TZ=America/Detroit
     # SAB's default HTTP port is 8080; qB is already using 8080 on the host via gluetun.
     # Expose SAB on 8081 externally to avoid a clash.
@@ -176,6 +176,8 @@ services:
     networks: [media_net]
     environment:
       - VPN_WATCHDOG_ENABLED=${VPN_WATCHDOG_ENABLED}
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
     volumes:
       - ${SCRIPTS_HOME}:/app
     working_dir: /app
