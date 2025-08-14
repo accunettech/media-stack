@@ -7,17 +7,39 @@ is_wsl() { grep -qiE '(microsoft|wsl)' /proc/version 2>/dev/null || return 1; }
 [[ -f .env ]] || { echo "Error: .env not found" >&2; exit 1; }
 set -a; source .env; set +a
 
-: "${CONTAINER_HOME:?Missing CONTAINER_HOME: this should be set to the path this script is running in}"
+: "${CONTAINER_HOME:?Missing CONTAINER_HOME}"
 : "${MEDIA_DIR:?Missing MEDIA_DIR}"
 : "${MOVIES_DIR:?Missing MOVIES_DIR}"
 : "${SHOWS_DIR:?Missing SHOWS_DIR}"
 : "${DOWNLOADS_DIR:?Missing DOWNLOADS_DIR}"
 
-OWNER="${SUDO_USER:-$USER}"
-export OWNER_UID="$(id -u "$OWNER")"
-export OWNER_GID="$(id -g "$OWNER")"
-export RENDER_GID="$(stat -c '%g' /dev/dri/renderD128 || echo 0)"
-export VIDEO_GID="$(stat -c '%g' /dev/dri/card0 || echo 0)"
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+if [[ "$CONTAINER_HOME" != "$SCRIPT_DIR" ]]; then
+  echo "CONTAINER_HOME should be in the same directory as this script: $SCRIPT_HOME"
+  exit 1
+fi
+
+OWNER_UID="$(id -u)"
+OWNER_GID="$(id -g)"
+RENDER_GID="$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")"
+VIDEO_GID="$(getent group video 2>/dev/null | cut -d: -f3 || echo "")"
+
+upsert_env() {
+  local key="$1" val="$2"
+  # portable awk update-or-append
+  awk -v k="$key" -v v="$val" '
+    BEGIN{found=0}
+    $0 ~ "^"k"=" {print k"="v; found=1; next}
+    {print}
+    END{if(!found) print k"="v}
+  ' .env > .env.tmp && mv .env.tmp .env
+}
+
+upsert_env OWNER_UID "$OWNER_UID"
+upsert_env OWNER_GID "$OWNER_GID"
+
+[[ -n "$RENDER_GID" ]] && upsert_env RENDER_GID "$RENDER_GID"
+[[ -n "$VIDEO_GID"  ]] && upsert_env VIDEO_GID  "$VIDEO_GID"
 
 require_sudo() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -31,8 +53,6 @@ require_sudo() {
   fi
 }
 
-# ---------------------------
-# Python install (idempotent)
 install_python_linux() {
   . /etc/os-release || true
   case "${ID:-}" in
