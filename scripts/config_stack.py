@@ -1530,6 +1530,7 @@ def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
             {"name": "urlBase", "value": ""},
             {"name": "username", "value": username or ""},
             {"name": "password", "value": password or ""},
+            {"name": "priority", "value": 2},
         ]
     }
     if category:
