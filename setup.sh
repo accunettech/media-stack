@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ---------------------------
-# Helpers
 have() { command -v "$1" >/dev/null 2>&1; }
 is_wsl() { grep -qiE '(microsoft|wsl)' /proc/version 2>/dev/null || return 1; }
+
+[[ -f .env ]] || { echo "Error: .env not found" >&2; exit 1; }
+set -a; source .env; set +a
+
+: "${CONTAINER_HOME:?Missing CONTAINER_HOME: this should be set to the path this script is running in}"
+: "${MEDIA_DIR:?Missing MEDIA_DIR}"
+: "${MOVIES_DIR:?Missing MOVIES_DIR}"
+: "${SHOWS_DIR:?Missing SHOWS_DIR}"
+: "${DOWNLOADS_DIR:?Missing DOWNLOADS_DIR}"
+
+OWNER="${SUDO_USER:-$USER}"
+OWNER_UID="$(id -u "$OWNER")"
+OWNER_GID="$(id -g "$OWNER")"
 
 require_sudo() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -207,10 +218,7 @@ echo
 echo "Creating config directories..."
 source .env
 mkdir -p $CONF_HOME/{gluetun,qbittorrent,jellyfin,sonarr,radarr,prowlarr}
-mkdir -p $MEDIA_DIR
-mkdir -p $MOVIES_DIR
-mkdir -p $SHOWS_DIR
-mkdir -p $DOWNLOADS_DIR
+sudo mkdir -p -- "$MEDIA_DIR" "$MOVIES_DIR" "$SHOWS_DIR" "$DOWNLOADS_DIR" && sudo chown -R "$OWNER_UID:$OWNER_GID" -- "$MEDIA_DIR" "$MOVIES_DIR" "$SHOWS_DIR" "$DOWNLOADS_DIR"
 echo "Building and starting containers..."
 echo
 docker compose up -d
