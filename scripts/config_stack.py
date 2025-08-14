@@ -224,7 +224,7 @@ def favor_usenet_everywhere(app_url, api_key, torrent_delay=300, usenet_delay=0,
             desired = None
             if impl == "sabnzbd" and cli.get("priority") != sab_prio:
                 desired = sab_prio
-            elif impl in ("qbittorrent", "qbittorrent", "q)bittorrent") and cli.get("priority") != qb_prio:
+            elif impl in ("qbittorrent") and cli.get("priority") != qb_prio:
                 desired = qb_prio
             elif impl == "qbittorrent" and cli.get("priority") != qb_prio:
                 desired = qb_prio
@@ -245,16 +245,6 @@ def favor_usenet_everywhere(app_url, api_key, torrent_delay=300, usenet_delay=0,
             print(f"[=] Download-client priorities already correct on {app_url}")
     except Exception as e:
         print(f"[!] Download-client priority update failed for {app_url}: {e}")
-
-def app_has_usenet_indexer(app_url, api_key) -> bool:
-    """Returns True if Sonarr/Radarr has any *enabled* Usenet indexer."""
-    import requests
-    H = {"X-Api-Key": api_key}
-    try:
-        idx = requests.get(f"{app_url}/api/v3/indexer", headers=H, timeout=15).json()
-        return any((i.get("enable") is True) and (str(i.get("protocol","")).lower() == "usenet") for i in idx or [])
-    except Exception:
-        return False
 
 def set_download_client_priorities(app_url, api_key, sab_first=True):
     """
@@ -420,15 +410,6 @@ def set_arr_updates_to_docker(app_url, api_key):
     if u.status_code not in (200, 202):
         raise RuntimeError(f"PUT host config failed {u.status_code}: {u.text[:400]}")
     print(f"[+] Set updates to Docker in {app_url}")
-
-def compose_container_id(service: str) -> str | None:
-    try:
-        out = subprocess.run(["docker", "compose", "ps", "-q", service],
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             text=True, timeout=10).stdout.strip()
-        return out or None
-    except Exception:
-        return None
 
 def wait_for_container_ready(service: str, port: int | None = None, timeout: int = 180) -> bool:
     """Wait until the container is healthy (if healthcheck exists) or, if none,
@@ -1518,7 +1499,7 @@ def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
     payload = {
         "enable": True,
         "protocol": "torrent",
-        "priority": 1,
+        "priority": 2,
         "configContract": "QBittorrentSettings",
         "implementation": "QBittorrent",
         "implementationName": "qBittorrent",
@@ -1530,7 +1511,6 @@ def ensure_qbittorrent_client(app_url, api_key, name="qbittorrent",
             {"name": "urlBase", "value": ""},
             {"name": "username", "value": username or ""},
             {"name": "password", "value": password or ""},
-            {"name": "priority", "value": 2},
         ]
     }
     if category:
@@ -1677,54 +1657,13 @@ def qbt_ensure_paths(base: str, username: str, password: str,
     print(("[+]" if ok else "[=]") + f" qB global paths set: complete={completed}, incomplete={incomplete}")
     return ok
 
-
-def qbt_ensure_categories(base: str, username: str, password: str, mapping: dict[str, str]) -> None:
-    sess = qbt_login_session(base, username, password)
-    if not sess:
-        print("[-] qB login failed with temp password. Trying UI credentials")
-        sess = qbt_login_session(base, UI_USER, UI_PASS)
-        if not sess:
-            print("[-] qB login failed; cannot set categories")
-            return
-
-    # list existing categories
-    try:
-        r = sess.get(f"{base}/api/v2/torrents/categories", timeout=10)
-        r.raise_for_status()
-        cats = r.json()  # { "name": {"name": "...", "savePath": "..."} }
-    except Exception as e:
-        print(f"[!] Could not list qB categories: {e}")
-        cats = {}
-
-    for name, save_path in mapping.items():
-        cur = cats.get(name)
-        if not cur:
-            # create
-            try:
-                cr = sess.post(f"{base}/api/v2/torrents/createCategory",
-                               data={"category": name, "savePath": save_path}, timeout=10)
-                print(f"[+] Created qB category '{name}' -> {save_path} (status {cr.status_code})")
-            except Exception as e:
-                print(f"[!] Create category '{name}' failed: {e}")
-        elif cur.get("savePath") != save_path:
-            # edit
-            try:
-                er = sess.post(f"{base}/api/v2/torrents/editCategory",
-                               data={"category": name, "savePath": save_path}, timeout=10)
-                print(f"[+] Updated qB category '{name}' -> {save_path} (status {er.status_code})")
-            except Exception as e:
-                print(f"[!] Edit category '{name}' failed: {e}")
-        else:
-            print(f"[=] qB category '{name}' already set to {save_path}")
-
-
 # ---------------------------
 def main():
     # Wait for apps requiring config to start
-    wait_for_http(RADARR_URL, QBT_API_WAIT_TIMEOUT, 'Radarr')
-    wait_for_http(SONARR_URL, QBT_API_WAIT_TIMEOUT, 'Sonarr')
-    wait_for_http(PROWLARR_URL, QBT_API_WAIT_TIMEOUT, 'Prowlarr')
-    wait_for_http(QBT_API_BASE, QBT_API_WAIT_TIMEOUT, 'qBittorrent')
+    wait_for_http(RADARR_URL, WAIT_TIMEOUT, 'Radarr')
+    wait_for_http(SONARR_URL, WAIT_TIMEOUT, 'Sonarr')
+    wait_for_http(PROWLARR_URL, WAIT_TIMEOUT, 'Prowlarr')
+    wait_for_http(QBT_API_BASE, WAIT_TIMEOUT, 'qBittorrent')
 
     # Read API keys from configs
     RADARR_API_KEY, SONARR_API_KEY, PROWLARR_API_KEY = get_arr_keys()
@@ -1809,7 +1748,7 @@ def main():
                 priority=SAB_SRV_PRIORITY)
         if changed_wl or changed_cat or changed_dirs or (SAB_CONFIG_PROVIDER and (changed_lang or changed_srv)):
             restart_container(SABNZBD_CONTAINER)
-            if not wait_for_container_ready(SABNZBD_CONTAINER, port=SAB_HTTP_PORT, timeout=180):
+            if not wait_for_container_ready(SABNZBD_CONTAINER, port=SAB_HTTP_PORT, timeout=WAIT_TIMEOUT):
                 time.sleep(8)
         SABNZBD_API_KEY = parse_sab_api_key(SABNZBD_CFG) or ""
     else:
@@ -1848,9 +1787,9 @@ def main():
     restart_container(SONARR_CONTAINER)
     restart_container(RADARR_CONTAINER)
     restart_container(PROWLARR_CONTAINER)
-    wait_for_http(SONARR_URL, 180, 'Sonarr')
-    wait_for_http(RADARR_URL, 180, 'Radarr')
-    wait_for_http(PROWLARR_URL, 180, 'Prowlarr')
+    wait_for_http(SONARR_URL, WAIT_TIMEOUT, 'Sonarr')
+    wait_for_http(RADARR_URL, WAIT_TIMEOUT, 'Radarr')
+    wait_for_http(PROWLARR_URL, WAIT_TIMEOUT, 'Prowlarr')
 
     print("[✓] Bootstrap complete")
 
