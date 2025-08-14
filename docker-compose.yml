@@ -71,8 +71,8 @@ services:
     #devices:
     #  - /dev/dri:/dev/dri
     #group_add:
-    #  - 993  # on docker HOST, run stat -c '%g' /dev/dri/renderD128 to get GUID used here
-    #  - 44   # on docker HOST, run stat -c '%g' /dev/dri/card0 to get GUID used here
+    #  - ${RENDER_GID}
+    #  - ${VIDEO_GID}
     volumes:
       - ${CONF_HOME}/jellyfin/config:/config
       - ${CONF_HOME}/jellyfin/cache:/cache
