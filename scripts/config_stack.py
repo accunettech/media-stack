@@ -30,6 +30,7 @@ PROWLARR_CFG = os.getenv("PROWLARR_CFG", f"{CONF_ROOT}/prowlarr/config.xml")
 PROWLARR_REQ_TIMEOUT = int(os.getenv("PROWLARR_REQ_TIMEOUT", "120"))
 PROWLARR_CONTAINER = 'prowlarr'
 INDEXERS = [x.strip() for x in os.getenv("INDEXERS", "1337x,EZTV,TorrentGalaxyClone,ThePirateBay").split(",") if x.strip()]
+TORRENT_INDEXER_DELAY = 60
 
 SONARR_URL   = os.getenv("SONARR_URL",   "http://localhost:8989").rstrip("/")
 SONARR_URL_IN_DOCKER   = "http://sonarr:8989"
@@ -150,7 +151,7 @@ def set_prowlarr_indexer_priorities(usenet_prio=10, torrent_prio=30, api_key="")
     if changed == 0:
         print("[=] Prowlarr indexer priorities already correct")
 
-def favor_usenet_everywhere(app_url, api_key, torrent_delay=300, usenet_delay=0, sab_first=True):
+def favor_usenet_everywhere(app_url, api_key, torrent_delay=TORRENT_INDEXER_DELAY, usenet_delay=0, sab_first=True):
     """
     For Sonarr/Radarr:
       1) Prefer Usenet in indexer config (but keep torrents enabled)
@@ -328,7 +329,7 @@ def smart_protocol_tuning(app_url, api_key, prowlarr_api_key, sab_first=True):
 
     if has_usenet:
         # Usenet present → prefer it + delay torrents (e.g. 5 min)
-        favor_usenet_everywhere(app_url, api_key, torrent_delay=300, usenet_delay=0, sab_first=sab_first)
+        favor_usenet_everywhere(app_url, api_key, torrent_delay=TORRENT_INDEXER_DELAY, usenet_delay=0, sab_first=sab_first)
         set_download_client_priorities(app_url, api_key, sab_first=True)
         return
 
