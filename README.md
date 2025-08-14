@@ -17,7 +17,7 @@
 - SABnzbd downloader is installed and configured automatically. If Usenet server was not specified in .env and setup during bootstrap, you must add it manually when you subscribe to a service. This is done in SABnzd UI (see SABnzbd URL below) in Settings > Servers > Add Server
 
 ******************
-### PERFORMANCE NOTES:
+### Performance Notes
 ******************
 It is highly recommended to run the media server on a device with a GPU. Barebones suggestion that has been tested is an Intel N100 Mini PC running Ubuntu Linux. Without, there may be playback issues if a DV WebDL movie is downloaded (common these days) and the device being streamed to only supports SDR. CPU likely will not be able to handle the load. If running on a device like a raspberry pi, it's best to add TRaSH custom formats in Radarr to block DV (WEBDL) downloads from being processed and added to the library. That reduces how often tone-mapping is required in down-conversion during transcoding.
 
@@ -27,9 +27,8 @@ If hosting on an N100 Mini PC, the following changes should be made in Jellyfin 
 - Enable Prefer OS native DXVA or VA-API hardware decoders
 - Enable hardware encoding
 
-
 *****
-### URLs:
+### URLs
 *****
 - Radarr: http://{docker-host}:7878
 - Sonarr: http://{docker-host}:8989
