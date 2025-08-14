@@ -14,8 +14,8 @@ set -a; source .env; set +a
 : "${DOWNLOADS_DIR:?Missing DOWNLOADS_DIR}"
 
 OWNER="${SUDO_USER:-$USER}"
-OWNER_UID="$(id -u "$OWNER")"
-OWNER_GID="$(id -g "$OWNER")"
+export OWNER_UID="$(id -u "$OWNER")"
+export OWNER_GID="$(id -g "$OWNER")"
 
 require_sudo() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
