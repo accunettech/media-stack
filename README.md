@@ -5,9 +5,7 @@
 2. Modify docker-compose.yaml if host device supports hardware acceleration (GPU onboard) ** See performance notes below
 3. Run setup.sh
 
-############
-### Features
-############
+************
 
 - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
 - Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env, except for Jellyfin, which you must complete startup wizard on first access
