@@ -112,10 +112,13 @@ services:
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
+    shm_size: "2gb"
     container_name: flaresolverr
     restart: unless-stopped
     environment:
       - LOG_LEVEL=info
+      - TZ=UTC
+      - BROWSER_TIMEOUT=120000
     networks: [media_net]
 
   prowlarr:
