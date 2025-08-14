@@ -2,39 +2,19 @@
 2. Modify docker-compose.yaml if host device supports hardware acceleration (GPU onboard) ** See performance notes below
 3. Run setup.sh
 
-Once complete:
-  - qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
-  - Make sure media directory specified in .env has permissions so container can access (most likely user who runs setup)
-  - Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env
-
-  qBittorrent: http://{docker-host}:8080/
-
-  Sonarr: http://{docker-host}:8989/
-    Verify below settings from Sonarr settings:
-        - Root folder: /shows
-        - Download client category: sonarr
-        - Completed Download Handling: enabled
-        - Set priority of Usenet indexers higher (lower number) to favor Usenet
-
-  Radarr: http://{docker-host}:7878/
-    Verify below settings from Sonarr settings:
-        - Root folder: /movies
-        - Download client category: radarr
-        - Completed Download Handling: enabled
-        - Set priority of Usenet indexers higher (lower number) to favor Usenet
-
-  Jellyfin: http://{docker-host}:8096/
-    On initial access of UI, set library paths, as prompted
-        -Libraries: Movies → /media/movies, Shows → /media/shows
-
-  Prowlarr: http://{docker-host}:9696/
-        - If using usenet, set priority low and set torrent indexers high
-
-  SABnzbd: http://{docker-host}:8081/
-        - Setup Downloader with API key (Settings > Servers > Add Server) if Usenet will be used
+- qBittorrent's container network will be forced through gluetun VPN tunnel. If VPN goes down, qBittorrent will lose network connectivity.
+- Username and password for all apps in the stack should be set to UI_USER and UI_PASS in .env, except for Jellyfin, which you must complete startup wizard on first access
+- Add/update/remove indexers using Prowlarr's UI (see Prowlarr URL below). Updates will automatically sync to Radarr and Sonarr
+- If Usenet indexer and server were configured in .env, priority will automatically be set to favor Usenet over torrent and SABnzbd downloader over qBittorrent.
+- If Usenet indexer and server are configured after initial bootstrap, you should set usenet indexers to a higher priority (lower number) than torrents and setup Profiles in Radarr and Sonarr to implement a wait period before they are used so Usenet can be searched first.
+- On initial access of Jellyfin UI (see Jellyfin URL below), you will be pushed through setup wizard. When at the step, add Movies lib pointing at /media/movies and a Shows lib pointing at /media/shows.
+- User Radarr to search for and download movies and Sonarr to search for and download shows. They will be placed in the correct spot and appear in Jellyfin once they are downloaded and processed.
+- SABnzbd downloader is installed and configured automatically. If Usenet server was not specified in .env and setup during bootstrap, you must add it manually when you subscribe to a service. This is done in SABnzd UI (see SABnzbd URL below) in Settings > Servers > Add Server
 
 
+******************
 PERFORMANCE NOTES:
+******************
 It is highly recommended to run the media server on a device with a GPU. Barebones suggestion that has been tested is an Intel N100 Mini PC running Ubuntu Linux. Without, there may be playback issues if a DV WebDL movie is downloaded (common these days) and the device being streamed to only supports SDR. CPU likely will not be able to handle the load. If running on a device like a raspberry pi, it's best to add TRaSH custom formats in Radarr to block DV (WEBDL) downloads from being processed and added to the library. That reduces how often tone-mapping is required in down-conversion during transcoding.
 
 If hosting on an N100 Mini PC, the following changes should be made in Jellyfin (Dashboard > Playback > Transcoding):
@@ -42,6 +22,14 @@ If hosting on an N100 Mini PC, the following changes should be made in Jellyfin 
 - Enable Hardware Decoding: H264, VC1, HEVC 10 bit, VP9 10 bit
 - Enable Prefer OS native DXVA or VA-API hardware decoders
 - Enable hardware encoding
-- Enable tone mapping
-- Tone mapping algorighm: BT.2390
-- Tone mapping range: TV (unless main client is not a TV; then Auto)
+
+
+*****
+URLs:
+*****
+Radarr: http://{docker-host}:7878
+Sonarr: http://{docker-host}:8989
+Jellyfin: http://{docker-host}:8096
+Prowlarr: http://{docker-host}:9696/
+qBittorrent: http://{docker-host}:8080/
+SABnzbd: http://{docker-host}:8081/
