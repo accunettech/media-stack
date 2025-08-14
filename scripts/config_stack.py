@@ -150,65 +150,236 @@ def set_prowlarr_indexer_priorities(usenet_prio=10, torrent_prio=30, api_key="")
     if changed == 0:
         print("[=] Prowlarr indexer priorities already correct")
 
-def prefer_usenet_in_arr(app_url, api_key):
-    """Enable both protocols and prefer Usenet in the app's indexer config."""
-    headers = {"X-Api-Key": api_key}
+def favor_usenet_everywhere(app_url, api_key, torrent_delay=300, usenet_delay=0, sab_first=True):
+    """
+    For Sonarr/Radarr:
+      1) Prefer Usenet in indexer config (but keep torrents enabled)
+      2) Set Delay Profiles: usenetDelay / torrentDelay + preferredProtocol=Usenet
+      3) Put SABnzbd above qBittorrent in download clients
+
+    torrent_delay: seconds to delay torrents (e.g. 180–600)
+    usenet_delay:  usually 0 (grab immediately)
+    sab_first:     True => SAB priority 1, qB priority 2
+    """
+    import requests
+    H = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+    # --- 1) App-wide indexer config: prefer Usenet, keep both protocols enabled ---
     try:
-        cfg = requests.get(f"{app_url}/api/v3/config/indexer", headers=headers, timeout=15).json()
-    except Exception as e:
-        print(f"[!] GET indexer config failed for {app_url}: {e}")
-        return
+        cfg = requests.get(f"{app_url}/api/v3/config/indexer", headers=H, timeout=15).json()
+        before = dict(cfg)
+        if "enableUsenet" in cfg:  cfg["enableUsenet"] = True
+        if "enableTorrent" in cfg: cfg["enableTorrent"] = True
 
-    # Try common field names observed in Sonarr/Radarr
-    before = cfg.copy()
-    if "enableUsenet" in cfg:   cfg["enableUsenet"] = True
-    if "enableTorrent" in cfg:  cfg["enableTorrent"] = True
-
-    # One of these is usually present:
-    if "preferUsenet" in cfg:
-        cfg["preferUsenet"] = True
-    elif "preferredProtocol" in cfg:
-        # sometimes: 'usenet' / 'torrent'
-        cfg["preferredProtocol"] = "usenet"
-
-    if cfg != before:
-        try:
-            r = requests.put(f"{app_url}/api/v3/config/indexer", headers=headers, json={k:v for k,v in cfg.items() if k != "updateAutomatically"}, timeout=15)
+        # Sonarr/Radarr use either 'preferUsenet' (bool) or 'preferredProtocol' ('usenet'/'torrent' or enum)
+        if "preferUsenet" in cfg:
+            cfg["preferUsenet"] = True
+        elif "preferredProtocol" in cfg:
+            cfg["preferredProtocol"] = "usenet"  # Radarr/Sonarr accept this; some builds use 1=usenet/2=torrent (we handle that next step)
+        if cfg != before:
+            # some builds reject unknown/readonly fields; prune if you’ve seen issues
+            body = {k: v for k, v in cfg.items() if k != "updateAutomatically"}
+            r = requests.put(f"{app_url}/api/v3/config/indexer", headers=H, json=body, timeout=15)
             print(f"[+] Prefer Usenet in {app_url}: {r.status_code}")
-        except Exception as e:
-            print(f"[!] PUT indexer config failed for {app_url}: {e}")
-    else:
-        print(f"[=] {app_url} already prefers Usenet (or fields not present)")
+        else:
+            print(f"[=] Indexer config already prefers Usenet in {app_url}")
+    except Exception as e:
+        print(f"[!] Indexer config update failed for {app_url}: {e}")
+
+    # --- 2) Delay Profiles: Prefer Usenet and set delays on all profiles ---
+    try:
+        profiles = requests.get(f"{app_url}/api/v3/delayprofile", headers=H, timeout=15).json()
+        for p in profiles:
+            changed = False
+            # preferredProtocol may be an enum (1=Usenet, 2=Torrent) or a string
+            if "preferredProtocol" in p:
+                if isinstance(p["preferredProtocol"], int):
+                    if p["preferredProtocol"] != 1:
+                        p["preferredProtocol"] = 1
+                        changed = True
+                else:
+                    if str(p["preferredProtocol"]).lower() != "usenet":
+                        p["preferredProtocol"] = "usenet"
+                        changed = True
+            # set delays
+            if p.get("usenetDelay") != usenet_delay:
+                p["usenetDelay"] = usenet_delay; changed = True
+            if p.get("torrentDelay") != torrent_delay:
+                p["torrentDelay"] = torrent_delay; changed = True
+
+            if changed:
+                r = requests.put(f"{app_url}/api/v3/delayprofile/{p['id']}", headers=H, json=p, timeout=15)
+                print(f"[+] DelayProfile {p['id']} updated on {app_url}: {r.status_code}")
+        print(f"[=] Delay Profiles set on {app_url} (usenetDelay={usenet_delay}s, torrentDelay={torrent_delay}s)")
+    except Exception as e:
+        print(f"[!] DelayProfile update failed for {app_url}: {e}")
+
+    # --- 3) Download-client priority: SAB above qBittorrent ---
+    try:
+        clients = requests.get(f"{app_url}/api/v3/downloadclient", headers=H, timeout=15).json()
+        sab_prio, qb_prio = (1, 2) if sab_first else (2, 1)
+        any_changed = False
+        for cli in clients:
+            impl = (cli.get("implementation") or "").lower()
+            desired = None
+            if impl == "sabnzbd" and cli.get("priority") != sab_prio:
+                desired = sab_prio
+            elif impl in ("qbittorrent", "qbittorrent", "q)bittorrent") and cli.get("priority") != qb_prio:
+                desired = qb_prio
+            elif impl == "qbittorrent" and cli.get("priority") != qb_prio:
+                desired = qb_prio
+            # normalize qB name variants
+            if (cli.get("implementation") == "QBittorrent") and cli.get("priority") != qb_prio:
+                desired = qb_prio
+
+            if desired is not None:
+                cli["priority"] = desired
+                any_changed = True
+                r = requests.put(f"{app_url}/api/v3/downloadclient/{cli['id']}", headers=H, json=cli, timeout=15)
+                if r.status_code not in (200, 202):
+                    print(f"[!] Failed updating client {cli.get('name')} on {app_url}: {r.status_code} {r.text[:200]}")
+
+        if any_changed:
+            print(f"[+] Download-client priorities set on {app_url} (SAB first={sab_first})")
+        else:
+            print(f"[=] Download-client priorities already correct on {app_url}")
+    except Exception as e:
+        print(f"[!] Download-client priority update failed for {app_url}: {e}")
+
+def app_has_usenet_indexer(app_url, api_key) -> bool:
+    """Returns True if Sonarr/Radarr has any *enabled* Usenet indexer."""
+    import requests
+    H = {"X-Api-Key": api_key}
+    try:
+        idx = requests.get(f"{app_url}/api/v3/indexer", headers=H, timeout=15).json()
+        return any((i.get("enable") is True) and (str(i.get("protocol","")).lower() == "usenet") for i in idx or [])
+    except Exception:
+        return False
 
 def set_download_client_priorities(app_url, api_key, sab_first=True):
-    """Ensure SAB has higher priority than qB (e.g. SAB=1, qB=2)."""
-    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+    """
+    Ensure SABnzbd is preferred over qBittorrent when Usenet is in play.
+    Lowest number = highest priority.
+    - If sab_first=True:  SAB=1, qB=2, others untouched (or bumped to >=3 if conflicting)
+    - If sab_first=False: qB=1 (if present), SAB=2 (if present)
+    """
+    import requests
+    H = {"X-Api-Key": api_key, "Content-Type":"application/json"}
+
     try:
-        clients = requests.get(f"{app_url}/api/v3/downloadclient", headers=headers, timeout=15).json()
+        clients = requests.get(f"{app_url}/api/v3/downloadclient", headers=H, timeout=15).json()
     except Exception as e:
         print(f"[!] Could not list download clients for {app_url}: {e}")
         return
-    # determine desired numbers
-    sab_prio, qb_prio = (1, 2) if sab_first else (2, 1)
+
+    # Identify common clients
+    sab = [c for c in clients if c.get("implementation") == "SABnzbd"]
+    qb  = [c for c in clients if c.get("implementation") == "QBittorrent"]
+
+    # Nothing to do
+    if not sab and not qb:
+        print(f"[=] No SAB/qB clients in {app_url}; leaving priorities as-is")
+        return
+
+    desired = {}
+    if sab_first and sab:
+        # Prefer SAB
+        desired.update({sab[0]["id"]: 1})
+        if qb: desired.update({qb[0]["id"]: 2})
+    else:
+        # Prefer qB (or SAB absent)
+        if qb: desired.update({qb[0]["id"]: 1})
+        if sab: desired.update({sab[0]["id"]: 2})
+
+    # Keep all other clients at >=3 if they would collide
+    used = set(desired.values())
+    next_free = 3
+    for c in clients:
+        cid = c["id"]
+        if cid in desired:
+            continue
+        pr = int(c.get("priority", 3))
+        if pr in used or pr < 3:
+            pr = next_free
+            next_free += 1
+        desired[cid] = pr
+        used.add(pr)
+
+    # Apply changes
     changed = False
-    for cli in clients:
-        impl = cli.get("implementation")
-        if impl == "SABnzbd" and cli.get("priority") != sab_prio:
-            cli["priority"] = sab_prio; changed = True
-        if impl == "QBittorrent" and cli.get("priority") != qb_prio:
-            cli["priority"] = qb_prio; changed = True
-    if changed:
-        for cli in clients:
+    for c in clients:
+        cid = c["id"]
+        new_pr = desired[cid]
+        if int(c.get("priority", 0)) != new_pr:
+            c["priority"] = new_pr
             try:
-                r = requests.put(f"{app_url}/api/v3/downloadclient/{cli['id']}",
-                                 headers=headers, json=cli, timeout=15)
+                r = requests.put(f"{app_url}/api/v3/downloadclient/{cid}", headers=H, json=c, timeout=15)
                 if r.status_code not in (200, 202):
-                    print(f"[!] Failed updating {impl} in {app_url}: {r.status_code} {r.text[:200]}")
+                    print(f"[!] Failed updating client {cid} in {app_url}: {r.status_code} {r.text[:200]}")
+                else:
+                    changed = True
             except Exception as e:
-                print(f"[!] Error updating client in {app_url}: {e}")
-        print(f"[+] Set download client priorities (SAB first) in {app_url}")
+                print(f"[!] Error updating client {cid} in {app_url}: {e}")
+
+    if changed:
+        print(f"[+] Updated download client priorities in {app_url} (sab_first={sab_first})")
     else:
         print(f"[=] Download client priorities already correct in {app_url}")
+
+def smart_protocol_tuning(app_url, api_key, sab_first=True):
+    """
+    If the app has a Usenet indexer: prefer Usenet and delay torrents.
+    If not: prefer Torrent and set *no* delays.
+    """
+    import requests
+    H = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+    has_usenet = app_has_usenet_indexer(app_url, api_key)
+
+    if has_usenet:
+        # Usenet present → prefer it + delay torrents (e.g. 5 min)
+        favor_usenet_everywhere(app_url, api_key, torrent_delay=300, usenet_delay=0, sab_first=sab_first)
+        set_download_client_priorities(app_url, api_key, sab_first=True)
+        return
+
+    # No Usenet indexers → prefer torrents, zero delays, leave SAB priority alone (likely absent)
+    # 1) indexer config (prefer torrent)
+    try:
+        cfg = requests.get(f"{app_url}/api/v3/config/indexer", headers=H, timeout=15).json()
+        changed = False
+        if "enableTorrent" in cfg and not cfg["enableTorrent"]:
+            cfg["enableTorrent"] = True; changed = True
+        if "enableUsenet" in cfg and cfg["enableUsenet"]:
+            # you can leave this True; but making intent explicit is fine:
+            cfg["enableUsenet"] = False; changed = True
+        if "preferUsenet" in cfg and cfg["preferUsenet"]:
+            cfg["preferUsenet"] = False; changed = True
+        if "preferredProtocol" in cfg and str(cfg["preferredProtocol"]).lower() != "torrent":
+            cfg["preferredProtocol"] = "torrent"; changed = True
+        if changed:
+            body = {k:v for k,v in cfg.items() if k != "updateAutomatically"}
+            requests.put(f"{app_url}/api/v3/config/indexer", headers=H, json=body, timeout=15)
+    except Exception as e:
+        print(f"[!] Torrent-prefer config update failed for {app_url}: {e}")
+
+    # 2) delay profiles → zero delays
+    try:
+        profiles = requests.get(f"{app_url}/api/v3/delayprofile", headers=H, timeout=15).json()
+        for p in profiles:
+            changed = False
+            if p.get("usenetDelay") != 0:   p["usenetDelay"] = 0; changed = True
+            if p.get("torrentDelay") != 0:  p["torrentDelay"] = 0; changed = True
+            if "preferredProtocol" in p:
+                if isinstance(p["preferredProtocol"], int):
+                    if p["preferredProtocol"] != 2:  # 2=torrent
+                        p["preferredProtocol"] = 2; changed = True
+                else:
+                    if str(p["preferredProtocol"]).lower() != "torrent":
+                        p["preferredProtocol"] = "torrent"; changed = True
+            if changed:
+                requests.put(f"{app_url}/api/v3/delayprofile/{p['id']}", headers=H, json=p, timeout=15)
+    except Exception as e:
+        print(f"[!] DelayProfile zeroing failed for {app_url}: {e}")
 
 def set_arr_updates_to_docker(app_url, api_key):
     import requests
@@ -1661,10 +1832,8 @@ def main():
         print("[-] SABNZBD_API_KEY missing; skip adding SAB client.")
 
     set_prowlarr_indexer_priorities(usenet_prio=10, torrent_prio=30, api_key=PROWLARR_API_KEY)
-    prefer_usenet_in_arr(SONARR_URL, SONARR_API_KEY)
-    prefer_usenet_in_arr(RADARR_URL, RADARR_API_KEY)
-    set_download_client_priorities(SONARR_URL, SONARR_API_KEY, sab_first=True)
-    set_download_client_priorities(RADARR_URL, RADARR_API_KEY, sab_first=True)
+    smart_protocol_tuning(RADARR_URL, RADARR_API_KEY)
+    smart_protocol_tuning(SONARR_URL, SONARR_API_KEY)
 
     restart_container(SONARR_CONTAINER)
     restart_container(RADARR_CONTAINER)
