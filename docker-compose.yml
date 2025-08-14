@@ -58,6 +58,7 @@ services:
     build:
       context: .
     container_name: jellyfin
+    user: "${OWNER_UID}:${OWNER_GID}"
     networks: [media_net]
     environment:
       - PUID=1000
