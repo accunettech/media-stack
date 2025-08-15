@@ -4,7 +4,7 @@ networks:
 
 services:
   gluetun:
-    image: qmcgaw/gluetun:latest
+    image: qmcgaw/gluetun@sha256:183c74263a07f4c931979140ac99ff4fbc44dcb1ca5b055856ef580b0fafdf1c
     container_name: gluetun
     networks: [media_net]
     cap_add:
@@ -159,7 +159,7 @@ services:
 
   # --- Auto-restart unhealthy containers (uses labels) ---
   deunhealth:
-    image: qmcgaw/deunhealth:latest
+    image: qmcgaw/deunhealth@sha256:fca3832ace35e3c028d3ec2e6271ac1161ed302b75b34e9dd01db1c106a25802
     container_name: deunhealth
     restart: unless-stopped
     network_mode: none
