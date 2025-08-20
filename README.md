@@ -29,6 +29,26 @@ If hosting on an N100 Mini PC, the following changes should be made in Jellyfin 
 - Enable hardware encoding
 
 
+********************
+### Language Notes
+********************
+If non-English language downloads are an issue, set a custom format in Radarr and a minimum score less than the custom format:
+1. Settings > Custom Formats -> Add
+2. Name it something notable like Favor English
+3. Click Add (under conditions):
+  - Name: English
+  - Language: English
+  - All other options unchecked
+  - SAVE
+4. Settings > Profiles
+5. Click on each Quality Profile:
+  - Set Custom Format Favor English (or whatever you named the CF)
+  - Minimum custom format score: 75 (or a number less than the CF score (set below)
+  - Language: English
+  - Custom Format score: 100 (or a number greater than minimum custom format score)
+  - SAVE
+
+
 ************
 ### URLs
 ************
