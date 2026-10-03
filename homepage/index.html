@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101824">
+  <title>Stuff · Media home</title>
+  <link rel="icon" href="icons/jellyfin.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="links.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><span class="eyebrow">YOUR MEDIA STACK</span><h1>All your stuff.<br><span>One place.</span></h1>
+      <p>Settle in for a movie, find your next series, or check on your downloads.</p>
+    </header>
+    <nav class="grid" aria-label="Media tools">
+      <a class="card" href="http://stuff:8096/" data-port="8096">
+        <img src="icons/jellyfin.svg" alt="" width="64" height="64">
+        <span class="category">Watch</span>
+        <h2>Jellyfin</h2><p>Watch movies and TV shows</p>
+        <span class="open">Open Jellyfin <span aria-hidden="true">↗</span></span>
+      </a>
+      <a class="card" href="http://stuff:8989/" data-port="8989">
+        <img src="icons/sonarr.svg" alt="" width="64" height="64">
+        <span class="category">Manage</span>
+        <h2>Sonarr</h2><p>Find and manage TV shows</p>
+        <span class="open">Open Sonarr <span aria-hidden="true">↗</span></span>
+      </a>
+      <a class="card" href="http://stuff:7878/" data-port="7878">
+        <img src="icons/radarr.svg" alt="" width="64" height="64">
+        <span class="category">Manage</span>
+        <h2>Radarr</h2><p>Find and manage movies</p>
+        <span class="open">Open Radarr <span aria-hidden="true">↗</span></span>
+      </a>
+      <a class="card" href="http://stuff:9696/" data-port="9696">
+        <img src="icons/prowlarr.svg" alt="" width="64" height="64">
+        <span class="category">Search</span>
+        <h2>Prowlarr</h2><p>Manage your search indexers</p>
+        <span class="open">Open Prowlarr <span aria-hidden="true">↗</span></span>
+      </a>
+      <a class="card" href="http://stuff:8080/" data-port="8080">
+        <img src="icons/qbittorrent.svg" alt="" width="64" height="64">
+        <span class="category">Download</span>
+        <h2>qBittorrent</h2><p>Manage torrent downloads</p>
+        <span class="open">Open qBittorrent <span aria-hidden="true">↗</span></span>
+      </a>
+      <a class="card" href="http://stuff:8081/" data-port="8081">
+        <img src="icons/sabnzbd.svg" alt="" width="64" height="64">
+        <span class="category">Download</span>
+        <h2>SABnzbd</h2><p>Manage Usenet downloads</p>
+        <span class="open">Open SABnzbd <span aria-hidden="true">↗</span></span>
+      </a>
+    </nav>
+    <footer>Stuff <span aria-hidden="true">/</span> Media home</footer>
+  </main>
+</body>
+</html>

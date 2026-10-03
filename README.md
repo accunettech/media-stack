@@ -52,9 +52,18 @@ If non-English language downloads are an issue, set a custom format in Radarr an
 ************
 ### URLs
 ************
+- Home page: http://{docker-host}/ (http://stuff/ on this host)
 - Radarr: http://{docker-host}:7878
 - Sonarr: http://{docker-host}:8989
 - Jellyfin: http://{docker-host}:8096
 - Prowlarr: http://{docker-host}:9696/
 - qBittorrent: http://{docker-host}:8080/
 - SABnzbd: http://{docker-host}:8081/
+
+### Home page
+
+The `homepage` service serves a static dashboard on port 80 with local logos and links to all six web tools. Links use the hostname or IP address used to open the page. Supporting services (Gluetun, FlareSolverr, deunhealth, and vpn-watch) have no user-facing web interface.
+
+Start or update only the home page with `docker compose up -d homepage`. Edit `homepage/index.html`, `homepage/style.css`, or `homepage/links.js` to customize it; the directory is mounted read-only into nginx, so refresh the browser after editing. The logos in `homepage/icons/` come from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons); no external assets are loaded by the browser.
+
+For `http://stuff/` to work on other devices, your LAN DNS (or each device's hosts file) must resolve `stuff` to this server's LAN IP address.

@@ -3,6 +3,21 @@ networks:
     driver: bridge
 
 services:
+  homepage:
+    image: nginx:stable-alpine
+    container_name: media-homepage
+    networks: [media_net]
+    ports:
+      - "80:80"
+    volumes:
+      - ./homepage:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   gluetun:
     image: qmcgaw/gluetun@sha256:183c74263a07f4c931979140ac99ff4fbc44dcb1ca5b055856ef580b0fafdf1c
     container_name: gluetun
@@ -66,11 +81,11 @@ services:
     ports:
       - "8096:8096"           # HTTP
     #Enable below only if hardware supports VAAPI for Intel iGPU (quick sync)
-    #devices:
-    #  - /dev/dri:/dev/dri
-    #group_add:
-    #  - ${RENDER_GID}
-    #  - ${VIDEO_GID}
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    group_add:
+      - ${RENDER_GID}
+      - ${VIDEO_GID}
     volumes:
       - ${CONF_HOME}/jellyfin/config:/config
       - ${CONF_HOME}/jellyfin/cache:/cache
