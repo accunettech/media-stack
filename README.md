@@ -52,12 +52,6 @@ Validation/check modes require the Python environment created by setup. `--confi
 
 Reruns update the named integrations instead of duplicating them and resolve IDs for each installation. Application-native Arr/SAB backups and a private Jellyfin settings backup are created before changing settings. Existing media files, library matches, watch history, monitoring choices and unrelated custom resources are not deleted or bulk-imported. This reproduces configuration, not media or prior database contents. Back up `CONF_HOME` separately when migrating watch history or managed-library records.
 
-## Application upgrades
-
-The October 23, 2026 upgrade and compatibility changes are recorded in [UPGRADE-REPORT.md](UPGRADE-REPORT.md). Images are pinned by digest: `pull` alone does not select a newer release. Review stable release/migration notes, back up configuration and databases consistently, update the image pins, pull the selected images and rebuild Jellyfin with `./compose.sh build --pull jellyfin`. Upgrade services in stages and finish with `./setup.sh --check`.
-
-Recreate Gluetun and qBittorrent together with `./compose.sh up -d --force-recreate gluetun qbittorrent`, then confirm VPN routing and both health checks. Restore the pre-upgrade databases as well as the old images when a migration prevents downgrade. Keep application credentials, internal service names and mount paths stable so existing integrations can migrate in place.
-
 ## Hardware selection
 
 Setup detects Intel/AMD DRM render devices and NVIDIA GPUs reported by `nvidia-smi`. On an interactive first run it offers a device list including CPU software transcoding. Unattended setup prefers Intel, then AMD, then NVIDIA; without a detected GPU it selects software. An explicitly requested GPU that is missing or fails its probe stops setup.
@@ -109,7 +103,7 @@ The MQTT watcher is excluded from normal Compose startup. Setup reconciles it to
 | qBittorrent | `http://stuff:8080/` |
 | SABnzbd | `http://stuff:8081/` |
 
-Replace `stuff` with the server's hostname/IP; LAN DNS or hosts files must resolve it. The homepage starts automatically with `./setup.sh`; setup and `./setup.sh --check` verify the served page, stylesheet, link script, and all six service icons. The static dashboard derives links from the hostname used to open it. Edit `homepage/index.html`, `homepage/style.css` or `homepage/links.js` and refresh the browser to customize it; the directory is mounted read-only into nginx. Icons are local assets from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons).
+Replace `stuff` with the server's hostname/IP; LAN DNS or hosts files must resolve it. The homepage starts automatically with `./setup.sh`; setup and `./setup.sh --check` verify the served page, stylesheet, link script, and all six service icons. The static dashboard derives links from the hostname used to open it. Edit `homepage/index.html`, `homepage/style.css` or `homepage/links.js` and refresh the browser to customize it; the directory is mounted read-only into nginx.
 
 ## Post-setup tests
 
