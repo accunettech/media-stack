@@ -1,0 +1,1349 @@
+{
+  "schemaVersion": 1,
+  "arr": {
+    "sonarr": {
+      "config/mediamanagement": {
+        "autoUnmonitorPreviouslyDownloadedEpisodes": false,
+        "recycleBin": "",
+        "recycleBinCleanupDays": 7,
+        "downloadPropersAndRepacks": "preferAndUpgrade",
+        "createEmptySeriesFolders": false,
+        "deleteEmptyFolders": false,
+        "fileDate": "none",
+        "rescanAfterRefresh": "always",
+        "setPermissionsLinux": false,
+        "chmodFolder": "755",
+        "chownGroup": "",
+        "episodeTitleRequired": "always",
+        "skipFreeSpaceCheckWhenImporting": false,
+        "minimumFreeSpaceWhenImporting": 100,
+        "copyUsingHardlinks": true,
+        "useScriptImport": false,
+        "scriptImportPath": "",
+        "importExtraFiles": false,
+        "extraFileExtensions": "srt",
+        "enableMediaInfo": true
+      },
+      "config/naming": {
+        "renameEpisodes": false,
+        "replaceIllegalCharacters": true,
+        "colonReplacementFormat": 4,
+        "customColonReplacementFormat": "",
+        "multiEpisodeStyle": 5,
+        "standardEpisodeFormat": "{Series Title} - S{season:00}E{episode:00} - {Episode Title} {Quality Full}",
+        "dailyEpisodeFormat": "{Series Title} - {Air-Date} - {Episode Title} {Quality Full}",
+        "animeEpisodeFormat": "{Series Title} - S{season:00}E{episode:00} - {Episode Title} {Quality Full}",
+        "seriesFolderFormat": "{Series Title}",
+        "seasonFolderFormat": "Season {season}",
+        "specialsFolderFormat": "Specials"
+      },
+      "config/indexer": {
+        "minimumAge": 0,
+        "retention": 0,
+        "maximumSize": 0,
+        "rssSyncInterval": 15
+      },
+      "config/downloadclient": {
+        "downloadClientWorkingFolders": "_UNPACK_|_FAILED_",
+        "enableCompletedDownloadHandling": true,
+        "autoRedownloadFailed": true,
+        "autoRedownloadFailedFromInteractiveSearch": true
+      },
+      "qualityprofiles": [
+        {
+          "name": "Any",
+          "upgradeAllowed": false,
+          "cutoff": 1,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [
+            {
+              "name": "Language: Not English",
+              "score": -10000
+            }
+          ],
+          "allowedQualityIds": [
+            1,
+            12,
+            8,
+            2,
+            13,
+            22,
+            4,
+            9,
+            14,
+            5,
+            6,
+            15,
+            3,
+            7
+          ]
+        },
+        {
+          "name": "SD",
+          "upgradeAllowed": false,
+          "cutoff": 1,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [
+            {
+              "name": "Language: Not English",
+              "score": -10000
+            }
+          ],
+          "allowedQualityIds": [
+            1,
+            12,
+            8,
+            2,
+            13,
+            22
+          ]
+        },
+        {
+          "name": "HD-720p",
+          "upgradeAllowed": false,
+          "cutoff": 4,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [
+            {
+              "name": "Language: Not English",
+              "score": -10000
+            }
+          ],
+          "allowedQualityIds": [
+            4,
+            14,
+            5,
+            6
+          ]
+        },
+        {
+          "name": "HD-1080p",
+          "upgradeAllowed": false,
+          "cutoff": 9,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [
+            {
+              "name": "Language: Not English",
+              "score": -10000
+            }
+          ],
+          "allowedQualityIds": [
+            9,
+            15,
+            3,
+            7
+          ]
+        },
+        {
+          "name": "Ultra-HD",
+          "upgradeAllowed": false,
+          "cutoff": 16,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [
+            {
+              "name": "Language: Not English",
+              "score": -10000
+            }
+          ],
+          "allowedQualityIds": [
+            16,
+            17,
+            18,
+            19
+          ]
+        },
+        {
+          "name": "HD - 720p/1080p",
+          "upgradeAllowed": false,
+          "cutoff": 4,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [
+            {
+              "name": "Language: Not English",
+              "score": -10000
+            }
+          ],
+          "allowedQualityIds": [
+            4,
+            9,
+            14,
+            5,
+            6,
+            15,
+            3,
+            7
+          ]
+        }
+      ],
+      "customformats": [
+        {
+          "name": "Language: Not English",
+          "includeCustomFormatWhenRenaming": false,
+          "specifications": [
+            {
+              "name": "Not English Language",
+              "implementation": "LanguageSpecification",
+              "negate": true,
+              "required": false,
+              "fields": [
+                {
+                  "name": "value",
+                  "value": 1
+                },
+                {
+                  "name": "exceptLanguage",
+                  "value": false
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "delayprofiles": [
+        {
+          "enableUsenet": true,
+          "enableTorrent": true,
+          "preferredProtocol": "usenet",
+          "usenetDelay": 0,
+          "torrentDelay": 60,
+          "bypassIfHighestQuality": true,
+          "bypassIfAboveCustomFormatScore": false,
+          "minimumCustomFormatScore": 0,
+          "order": 2147483647,
+          "tags": []
+        }
+      ],
+      "downloadclients": [
+        {
+          "enable": true,
+          "protocol": "torrent",
+          "priority": 2,
+          "removeCompletedDownloads": false,
+          "removeFailedDownloads": false,
+          "name": "qbittorrent",
+          "fields": [
+            {
+              "name": "host",
+              "value": "gluetun"
+            },
+            {
+              "name": "port",
+              "value": 8080
+            },
+            {
+              "name": "useSsl",
+              "value": false
+            },
+            {
+              "name": "urlBase",
+              "value": ""
+            },
+            {
+              "name": "username",
+              "value": "${UI_USER}"
+            },
+            {
+              "name": "password",
+              "value": "${UI_PASS}"
+            },
+            {
+              "name": "tvCategory",
+              "value": "tv-sonarr"
+            },
+            {
+              "name": "tvImportedCategory"
+            },
+            {
+              "name": "recentTvPriority",
+              "value": 0
+            },
+            {
+              "name": "olderTvPriority",
+              "value": 0
+            },
+            {
+              "name": "initialState",
+              "value": 0
+            },
+            {
+              "name": "sequentialOrder",
+              "value": false
+            },
+            {
+              "name": "firstAndLast",
+              "value": false
+            },
+            {
+              "name": "contentLayout",
+              "value": 0
+            }
+          ],
+          "implementation": "QBittorrent",
+          "configContract": "QBittorrentSettings",
+          "tags": []
+        },
+        {
+          "enable": true,
+          "protocol": "usenet",
+          "priority": 1,
+          "removeCompletedDownloads": false,
+          "removeFailedDownloads": false,
+          "name": "sabnzbd",
+          "fields": [
+            {
+              "name": "host",
+              "value": "sabnzbd"
+            },
+            {
+              "name": "port",
+              "value": 8080
+            },
+            {
+              "name": "useSsl",
+              "value": false
+            },
+            {
+              "name": "urlBase",
+              "value": ""
+            },
+            {
+              "name": "apiKey",
+              "value": "${SAB_API_KEY}"
+            },
+            {
+              "name": "username",
+              "value": ""
+            },
+            {
+              "name": "password",
+              "value": ""
+            },
+            {
+              "name": "tvCategory",
+              "value": "tv"
+            },
+            {
+              "name": "recentTvPriority",
+              "value": -100
+            },
+            {
+              "name": "olderTvPriority",
+              "value": -100
+            }
+          ],
+          "implementation": "SABnzbd",
+          "configContract": "SabnzbdSettings",
+          "tags": []
+        }
+      ]
+    },
+    "radarr": {
+      "config/mediamanagement": {
+        "autoUnmonitorPreviouslyDownloadedMovies": false,
+        "recycleBin": "",
+        "recycleBinCleanupDays": 7,
+        "downloadPropersAndRepacks": "preferAndUpgrade",
+        "createEmptyMovieFolders": false,
+        "deleteEmptyFolders": false,
+        "fileDate": "none",
+        "rescanAfterRefresh": "always",
+        "autoRenameFolders": false,
+        "pathsDefaultStatic": false,
+        "setPermissionsLinux": false,
+        "chmodFolder": "755",
+        "chownGroup": "",
+        "skipFreeSpaceCheckWhenImporting": false,
+        "minimumFreeSpaceWhenImporting": 100,
+        "copyUsingHardlinks": true,
+        "useScriptImport": false,
+        "scriptImportPath": "",
+        "importExtraFiles": false,
+        "extraFileExtensions": "srt",
+        "enableMediaInfo": true
+      },
+      "config/naming": {
+        "renameMovies": false,
+        "replaceIllegalCharacters": true,
+        "colonReplacementFormat": "smart",
+        "standardMovieFormat": "{Movie Title} ({Release Year}) {Quality Full}",
+        "movieFolderFormat": "{Movie Title} ({Release Year})"
+      },
+      "config/indexer": {
+        "minimumAge": 0,
+        "maximumSize": 0,
+        "retention": 0,
+        "rssSyncInterval": 30,
+        "preferIndexerFlags": false,
+        "availabilityDelay": 0,
+        "allowHardcodedSubs": false,
+        "whitelistedHardcodedSubs": ""
+      },
+      "config/downloadclient": {
+        "downloadClientWorkingFolders": "_UNPACK_|_FAILED_",
+        "enableCompletedDownloadHandling": true,
+        "checkForFinishedDownloadInterval": 1,
+        "autoRedownloadFailed": true,
+        "autoRedownloadFailedFromInteractiveSearch": true
+      },
+      "qualityprofiles": [
+        {
+          "name": "Any",
+          "upgradeAllowed": false,
+          "cutoff": 20,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [],
+          "language": {
+            "id": 1,
+            "name": "English"
+          },
+          "allowedQualityIds": [
+            24,
+            25,
+            26,
+            27,
+            29,
+            28,
+            1,
+            2,
+            23,
+            8,
+            12,
+            20,
+            21,
+            4,
+            5,
+            14,
+            6,
+            9,
+            3,
+            15,
+            7,
+            30,
+            16,
+            18,
+            17,
+            19,
+            31,
+            22
+          ]
+        },
+        {
+          "name": "SD",
+          "upgradeAllowed": false,
+          "cutoff": 20,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [],
+          "language": {
+            "id": 1,
+            "name": "English"
+          },
+          "allowedQualityIds": [
+            24,
+            25,
+            26,
+            27,
+            29,
+            28,
+            1,
+            2,
+            8,
+            12,
+            20,
+            21
+          ]
+        },
+        {
+          "name": "HD-720p",
+          "upgradeAllowed": false,
+          "cutoff": 6,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [],
+          "language": {
+            "id": 1,
+            "name": "English"
+          },
+          "allowedQualityIds": [
+            4,
+            5,
+            14,
+            6
+          ]
+        },
+        {
+          "name": "HD-1080p",
+          "upgradeAllowed": false,
+          "cutoff": 7,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [],
+          "language": {
+            "id": 1,
+            "name": "English"
+          },
+          "allowedQualityIds": [
+            9,
+            3,
+            15,
+            7,
+            30
+          ]
+        },
+        {
+          "name": "Ultra-HD",
+          "upgradeAllowed": false,
+          "cutoff": 31,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [],
+          "language": {
+            "id": 1,
+            "name": "English"
+          },
+          "allowedQualityIds": [
+            16,
+            18,
+            17,
+            19,
+            31
+          ]
+        },
+        {
+          "name": "HD - 720p/1080p",
+          "upgradeAllowed": false,
+          "cutoff": 6,
+          "minFormatScore": 0,
+          "cutoffFormatScore": 0,
+          "minUpgradeFormatScore": 1,
+          "formatItems": [],
+          "language": {
+            "id": 1,
+            "name": "English"
+          },
+          "allowedQualityIds": [
+            4,
+            5,
+            14,
+            6,
+            9,
+            3,
+            15,
+            7,
+            30
+          ]
+        }
+      ],
+      "customformats": [],
+      "delayprofiles": [
+        {
+          "enableUsenet": true,
+          "enableTorrent": true,
+          "preferredProtocol": "usenet",
+          "usenetDelay": 0,
+          "torrentDelay": 60,
+          "bypassIfHighestQuality": true,
+          "bypassIfAboveCustomFormatScore": false,
+          "minimumCustomFormatScore": 0,
+          "order": 2147483647,
+          "tags": []
+        }
+      ],
+      "downloadclients": [
+        {
+          "enable": true,
+          "protocol": "torrent",
+          "priority": 2,
+          "removeCompletedDownloads": false,
+          "removeFailedDownloads": false,
+          "name": "qbittorrent",
+          "fields": [
+            {
+              "name": "host",
+              "value": "gluetun"
+            },
+            {
+              "name": "port",
+              "value": 8080
+            },
+            {
+              "name": "useSsl",
+              "value": false
+            },
+            {
+              "name": "urlBase",
+              "value": ""
+            },
+            {
+              "name": "username",
+              "value": "${UI_USER}"
+            },
+            {
+              "name": "password",
+              "value": "${UI_PASS}"
+            },
+            {
+              "name": "movieCategory",
+              "value": "radarr"
+            },
+            {
+              "name": "movieImportedCategory"
+            },
+            {
+              "name": "recentMoviePriority",
+              "value": 0
+            },
+            {
+              "name": "olderMoviePriority",
+              "value": 0
+            },
+            {
+              "name": "initialState",
+              "value": 0
+            },
+            {
+              "name": "sequentialOrder",
+              "value": false
+            },
+            {
+              "name": "firstAndLast",
+              "value": false
+            },
+            {
+              "name": "contentLayout",
+              "value": 0
+            }
+          ],
+          "implementation": "QBittorrent",
+          "configContract": "QBittorrentSettings",
+          "tags": []
+        },
+        {
+          "enable": true,
+          "protocol": "usenet",
+          "priority": 1,
+          "removeCompletedDownloads": false,
+          "removeFailedDownloads": false,
+          "name": "sabnzbd",
+          "fields": [
+            {
+              "name": "host",
+              "value": "sabnzbd"
+            },
+            {
+              "name": "port",
+              "value": 8080
+            },
+            {
+              "name": "useSsl",
+              "value": false
+            },
+            {
+              "name": "urlBase",
+              "value": ""
+            },
+            {
+              "name": "apiKey",
+              "value": "${SAB_API_KEY}"
+            },
+            {
+              "name": "username",
+              "value": ""
+            },
+            {
+              "name": "password",
+              "value": ""
+            },
+            {
+              "name": "movieCategory",
+              "value": "movies"
+            },
+            {
+              "name": "recentMoviePriority",
+              "value": -100
+            },
+            {
+              "name": "olderMoviePriority",
+              "value": -100
+            }
+          ],
+          "implementation": "SABnzbd",
+          "configContract": "SabnzbdSettings",
+          "tags": []
+        }
+      ]
+    }
+  },
+  "prowlarr": {
+    "indexer": [
+      {
+        "definitionName": "1337x",
+        "enable": true,
+        "protocol": "torrent",
+        "priority": 30,
+        "name": "1337x",
+        "fields": [
+          {
+            "name": "definitionFile",
+            "value": "1337x"
+          },
+          {
+            "name": "baseSettings.limitsUnit",
+            "value": 0
+          },
+          {
+            "name": "torrentBaseSettings.preferMagnetUrl",
+            "value": false
+          },
+          {
+            "name": "uploader",
+            "value": ""
+          },
+          {
+            "name": "primarydownloadlink",
+            "value": 1
+          },
+          {
+            "name": "fallbackdownloadlink",
+            "value": 0
+          },
+          {
+            "name": "disablesort",
+            "value": false
+          },
+          {
+            "name": "sort",
+            "value": 2
+          },
+          {
+            "name": "type",
+            "value": 1
+          }
+        ],
+        "implementation": "Cardigann",
+        "configContract": "CardigannSettings",
+        "tags": [
+          "cf"
+        ],
+        "appProfileName": "Standard"
+      },
+      {
+        "definitionName": "eztv",
+        "enable": true,
+        "protocol": "torrent",
+        "priority": 30,
+        "name": "EZTV",
+        "fields": [
+          {
+            "name": "definitionFile",
+            "value": "eztv"
+          },
+          {
+            "name": "baseSettings.limitsUnit",
+            "value": 0
+          },
+          {
+            "name": "torrentBaseSettings.preferMagnetUrl",
+            "value": false
+          }
+        ],
+        "implementation": "Cardigann",
+        "configContract": "CardigannSettings",
+        "tags": [
+          "cf"
+        ],
+        "appProfileName": "Standard"
+      },
+      {
+        "definitionName": "Newznab",
+        "enable": true,
+        "protocol": "usenet",
+        "redirect": true,
+        "priority": 10,
+        "name": "NZBgeek",
+        "fields": [
+          {
+            "name": "baseUrl",
+            "value": "${USENET_DEFAULT_BASEURL}"
+          },
+          {
+            "name": "apiPath",
+            "value": "/api"
+          },
+          {
+            "name": "apiKey",
+            "value": "${USENET_DEFAULT_APIKEY}"
+          },
+          {
+            "name": "baseSettings.limitsUnit",
+            "value": 0
+          }
+        ],
+        "implementation": "Newznab",
+        "configContract": "NewznabSettings",
+        "tags": [],
+        "appProfileName": "Standard"
+      },
+      {
+        "definitionName": "thepiratebay",
+        "enable": true,
+        "protocol": "torrent",
+        "priority": 30,
+        "name": "The Pirate Bay",
+        "fields": [
+          {
+            "name": "definitionFile",
+            "value": "thepiratebay"
+          },
+          {
+            "name": "baseSettings.limitsUnit",
+            "value": 0
+          },
+          {
+            "name": "torrentBaseSettings.preferMagnetUrl",
+            "value": false
+          },
+          {
+            "name": "apiurl",
+            "value": "apibay.org"
+          },
+          {
+            "name": "top100",
+            "value": 6
+          },
+          {
+            "name": "uploader",
+            "value": ""
+          }
+        ],
+        "implementation": "Cardigann",
+        "configContract": "CardigannSettings",
+        "tags": [
+          "cf"
+        ],
+        "appProfileName": "Standard"
+      }
+    ],
+    "indexerproxy": [
+      {
+        "name": "FlareSolverr",
+        "fields": [
+          {
+            "name": "host",
+            "value": "http://flaresolverr:8191"
+          },
+          {
+            "name": "requestTimeout",
+            "value": 60
+          }
+        ],
+        "implementation": "FlareSolverr",
+        "configContract": "FlareSolverrSettings",
+        "tags": [
+          "cf"
+        ]
+      }
+    ],
+    "applications": [
+      {
+        "syncLevel": "fullSync",
+        "name": "Radarr",
+        "fields": [
+          {
+            "name": "prowlarrUrl",
+            "value": "http://prowlarr:9696"
+          },
+          {
+            "name": "baseUrl",
+            "value": "http://radarr:7878"
+          },
+          {
+            "name": "apiKey",
+            "value": "${RADARR_API_KEY}"
+          },
+          {
+            "name": "syncCategories",
+            "value": [
+              2000,
+              2010,
+              2020,
+              2030,
+              2040,
+              2045,
+              2050,
+              2060,
+              2070,
+              2080,
+              2090
+            ]
+          },
+          {
+            "name": "syncRejectBlocklistedTorrentHashesWhileGrabbing",
+            "value": false
+          }
+        ],
+        "implementation": "Radarr",
+        "configContract": "RadarrSettings",
+        "tags": []
+      },
+      {
+        "syncLevel": "fullSync",
+        "name": "Sonarr",
+        "fields": [
+          {
+            "name": "prowlarrUrl",
+            "value": "http://prowlarr:9696"
+          },
+          {
+            "name": "baseUrl",
+            "value": "http://sonarr:8989"
+          },
+          {
+            "name": "apiKey",
+            "value": "${SONARR_API_KEY}"
+          },
+          {
+            "name": "syncCategories",
+            "value": [
+              5000,
+              5010,
+              5020,
+              5030,
+              5040,
+              5045,
+              5050,
+              5090
+            ]
+          },
+          {
+            "name": "animeSyncCategories",
+            "value": [
+              5070
+            ]
+          },
+          {
+            "name": "syncAnimeStandardFormatSearch",
+            "value": true
+          },
+          {
+            "name": "syncRejectBlocklistedTorrentHashesWhileGrabbing",
+            "value": false
+          }
+        ],
+        "implementation": "Sonarr",
+        "configContract": "SonarrSettings",
+        "tags": []
+      }
+    ],
+    "appprofile": [
+      {
+        "name": "Standard",
+        "enableRss": true,
+        "enableAutomaticSearch": true,
+        "enableInteractiveSearch": true,
+        "minimumSeeders": 1
+      }
+    ]
+  },
+  "qbittorrent": {
+    "save_path": "/downloads",
+    "temp_path": "/downloads/incomplete",
+    "temp_path_enabled": true,
+    "auto_tmm_enabled": false,
+    "torrent_changed_tmm_enabled": true,
+    "save_path_changed_tmm_enabled": false,
+    "category_changed_tmm_enabled": false,
+    "preallocate_all": false,
+    "incomplete_files_ext": false,
+    "listen_port": 6881,
+    "upnp": false,
+    "random_port": false,
+    "web_ui_csrf_protection_enabled": true,
+    "web_ui_host_header_validation_enabled": true,
+    "bypass_local_auth": false,
+    "bypass_auth_subnet_whitelist_enabled": false
+  },
+  "qbittorrentCategories": {
+    "radarr": {
+      "name": "radarr",
+      "savePath": ""
+    },
+    "tv-sonarr": {
+      "name": "tv-sonarr",
+      "savePath": ""
+    }
+  },
+  "jellyfin": {
+    "encoding": {
+      "EncodingThreadCount": -1,
+      "TranscodingTempPath": "/cache/transcodes",
+      "EnableFallbackFont": false,
+      "EnableAudioVbr": false,
+      "DownMixAudioBoost": 2,
+      "DownMixStereoAlgorithm": "None",
+      "MaxMuxingQueueSize": 2048,
+      "EnableThrottling": true,
+      "ThrottleDelaySeconds": 180,
+      "EnableSegmentDeletion": false,
+      "SegmentKeepSeconds": 720,
+      "HardwareAccelerationType": "qsv",
+      "EncoderAppPathDisplay": "/usr/lib/jellyfin-ffmpeg/ffmpeg",
+      "VaapiDevice": "/dev/dri/renderD128",
+      "QsvDevice": "/dev/dri/renderD128",
+      "EnableTonemapping": true,
+      "EnableVppTonemapping": true,
+      "EnableVideoToolboxTonemapping": false,
+      "TonemappingAlgorithm": "bt2390",
+      "TonemappingMode": "auto",
+      "TonemappingRange": "auto",
+      "TonemappingDesat": 0,
+      "TonemappingPeak": 100,
+      "TonemappingParam": 0,
+      "VppTonemappingBrightness": 16,
+      "VppTonemappingContrast": 1,
+      "H264Crf": 23,
+      "H265Crf": 28,
+      "EncoderPreset": "auto",
+      "DeinterlaceDoubleRate": false,
+      "DeinterlaceMethod": "yadif",
+      "EnableDecodingColorDepth10Hevc": true,
+      "EnableDecodingColorDepth10Vp9": true,
+      "EnableDecodingColorDepth10HevcRext": false,
+      "EnableDecodingColorDepth12HevcRext": false,
+      "EnableEnhancedNvdecDecoder": true,
+      "PreferSystemNativeHwDecoder": true,
+      "EnableIntelLowPowerH264HwEncoder": true,
+      "EnableIntelLowPowerHevcHwEncoder": true,
+      "EnableHardwareEncoding": true,
+      "AllowHevcEncoding": true,
+      "AllowAv1Encoding": true,
+      "EnableSubtitleExtraction": true,
+      "SubtitleExtractionTimeoutMinutes": 30,
+      "HardwareDecodingCodecs": [
+        "h264",
+        "hevc",
+        "mpeg2video",
+        "vp9",
+        "av1"
+      ],
+      "AllowOnDemandMetadataBasedKeyframeExtractionForExtensions": [
+        "mkv"
+      ]
+    },
+    "system": {
+      "PreferredMetadataLanguage": "en",
+      "MetadataCountryCode": "US",
+      "RemoteClientBitrateLimit": 0
+    },
+    "user": {
+      "AudioLanguagePreference": "eng",
+      "SubtitleLanguagePreference": "eng",
+      "PlayDefaultAudioTrack": false,
+      "RememberAudioSelections": false,
+      "SubtitleMode": "Smart"
+    },
+    "libraries": [
+      {
+        "name": "Shows",
+        "type": "tvshows",
+        "path": "/media/shows",
+        "options": {
+          "Enabled": true,
+          "EnablePhotos": true,
+          "EnableRealtimeMonitor": true,
+          "EnableLUFSScan": true,
+          "EnableChapterImageExtraction": false,
+          "ExtractChapterImagesDuringLibraryScan": false,
+          "EnableTrickplayImageExtraction": false,
+          "ExtractTrickplayImagesDuringLibraryScan": false,
+          "PathInfos": [
+            {
+              "Path": "/media/shows"
+            }
+          ],
+          "SaveLocalMetadata": false,
+          "EnableInternetProviders": true,
+          "EnableAutomaticSeriesGrouping": false,
+          "EnableEmbeddedTitles": false,
+          "EnableEmbeddedExtrasTitles": false,
+          "EnableEmbeddedEpisodeInfos": false,
+          "AutomaticRefreshIntervalDays": 0,
+          "PreferredMetadataLanguage": "en",
+          "MetadataCountryCode": "",
+          "SeasonZeroDisplayName": "Specials",
+          "MetadataSavers": [],
+          "DisabledLocalMetadataReaders": [],
+          "LocalMetadataReaderOrder": [
+            "Nfo"
+          ],
+          "DisabledSubtitleFetchers": [],
+          "SubtitleFetcherOrder": [],
+          "DisabledMediaSegmentProviders": [],
+          "MediaSegmentProviderOrder": [],
+          "SkipSubtitlesIfEmbeddedSubtitlesPresent": false,
+          "SkipSubtitlesIfAudioTrackMatches": false,
+          "SubtitleDownloadLanguages": [],
+          "RequirePerfectSubtitleMatch": true,
+          "SaveSubtitlesWithMedia": true,
+          "SaveLyricsWithMedia": false,
+          "SaveTrickplayWithMedia": false,
+          "DisabledLyricFetchers": [],
+          "LyricFetcherOrder": [],
+          "PreferNonstandardArtistsTag": false,
+          "UseCustomTagDelimiters": false,
+          "CustomTagDelimiters": [
+            "/",
+            "|",
+            ";",
+            "\\"
+          ],
+          "DelimiterWhitelist": [],
+          "AutomaticallyAddToCollection": false,
+          "AllowEmbeddedSubtitles": "AllowAll",
+          "TypeOptions": [
+            {
+              "Type": "Series",
+              "MetadataFetchers": [
+                "TheMovieDb",
+                "The Open Movie Database"
+              ],
+              "MetadataFetcherOrder": [
+                "TheMovieDb",
+                "The Open Movie Database"
+              ],
+              "ImageFetchers": [
+                "TheMovieDb"
+              ],
+              "ImageFetcherOrder": [
+                "TheMovieDb"
+              ],
+              "ImageOptions": [],
+              "SimilarItemProviders": [
+                "Local Genre/Tag"
+              ],
+              "SimilarItemProviderOrder": [
+                "TheMovieDb",
+                "Local Genre/Tag"
+              ]
+            },
+            {
+              "Type": "Season",
+              "MetadataFetchers": [
+                "TheMovieDb"
+              ],
+              "MetadataFetcherOrder": [
+                "TheMovieDb"
+              ],
+              "ImageFetchers": [
+                "TheMovieDb"
+              ],
+              "ImageFetcherOrder": [
+                "TheMovieDb"
+              ],
+              "ImageOptions": [],
+              "SimilarItemProviders": [],
+              "SimilarItemProviderOrder": []
+            },
+            {
+              "Type": "Episode",
+              "MetadataFetchers": [
+                "TheMovieDb",
+                "The Open Movie Database"
+              ],
+              "MetadataFetcherOrder": [
+                "TheMovieDb",
+                "The Open Movie Database"
+              ],
+              "ImageFetchers": [
+                "TheMovieDb",
+                "The Open Movie Database",
+                "Embedded Image Extractor",
+                "Screen Grabber"
+              ],
+              "ImageFetcherOrder": [
+                "TheMovieDb",
+                "The Open Movie Database",
+                "Embedded Image Extractor",
+                "Screen Grabber"
+              ],
+              "ImageOptions": [],
+              "SimilarItemProviders": [],
+              "SimilarItemProviderOrder": []
+            }
+          ]
+        }
+      },
+      {
+        "name": "Movies",
+        "type": "movies",
+        "path": "/media/movies",
+        "options": {
+          "Enabled": true,
+          "EnablePhotos": true,
+          "EnableRealtimeMonitor": true,
+          "EnableLUFSScan": true,
+          "EnableChapterImageExtraction": false,
+          "ExtractChapterImagesDuringLibraryScan": false,
+          "EnableTrickplayImageExtraction": false,
+          "ExtractTrickplayImagesDuringLibraryScan": false,
+          "PathInfos": [
+            {
+              "Path": "/media/movies"
+            }
+          ],
+          "SaveLocalMetadata": false,
+          "EnableInternetProviders": true,
+          "EnableAutomaticSeriesGrouping": false,
+          "EnableEmbeddedTitles": false,
+          "EnableEmbeddedExtrasTitles": false,
+          "EnableEmbeddedEpisodeInfos": false,
+          "AutomaticRefreshIntervalDays": 0,
+          "PreferredMetadataLanguage": "en",
+          "MetadataCountryCode": "",
+          "SeasonZeroDisplayName": "Specials",
+          "MetadataSavers": [],
+          "DisabledLocalMetadataReaders": [],
+          "LocalMetadataReaderOrder": [
+            "Nfo"
+          ],
+          "DisabledSubtitleFetchers": [],
+          "SubtitleFetcherOrder": [],
+          "DisabledMediaSegmentProviders": [],
+          "MediaSegmentProviderOrder": [],
+          "SkipSubtitlesIfEmbeddedSubtitlesPresent": false,
+          "SkipSubtitlesIfAudioTrackMatches": false,
+          "SubtitleDownloadLanguages": [],
+          "RequirePerfectSubtitleMatch": true,
+          "SaveSubtitlesWithMedia": true,
+          "SaveLyricsWithMedia": false,
+          "SaveTrickplayWithMedia": false,
+          "DisabledLyricFetchers": [],
+          "LyricFetcherOrder": [],
+          "PreferNonstandardArtistsTag": false,
+          "UseCustomTagDelimiters": false,
+          "CustomTagDelimiters": [
+            "/",
+            "|",
+            ";",
+            "\\"
+          ],
+          "DelimiterWhitelist": [],
+          "AutomaticallyAddToCollection": false,
+          "AllowEmbeddedSubtitles": "AllowAll",
+          "TypeOptions": [
+            {
+              "Type": "Movie",
+              "MetadataFetchers": [
+                "TheMovieDb",
+                "The Open Movie Database"
+              ],
+              "MetadataFetcherOrder": [
+                "TheMovieDb",
+                "The Open Movie Database"
+              ],
+              "ImageFetchers": [
+                "TheMovieDb",
+                "The Open Movie Database",
+                "Embedded Image Extractor",
+                "Screen Grabber"
+              ],
+              "ImageFetcherOrder": [
+                "TheMovieDb",
+                "The Open Movie Database",
+                "Embedded Image Extractor",
+                "Screen Grabber"
+              ],
+              "ImageOptions": [],
+              "SimilarItemProviders": [
+                "Local Genre/Tag"
+              ],
+              "SimilarItemProviderOrder": [
+                "TheMovieDb",
+                "Local Genre/Tag"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "sabnzbd": {
+    "categories": [
+      {
+        "name": "*",
+        "order": 0,
+        "pp": "3",
+        "script": "None",
+        "dir": "",
+        "newzbin": "",
+        "priority": 0
+      },
+      {
+        "name": "movies",
+        "order": 1,
+        "pp": "",
+        "script": "Default",
+        "dir": "",
+        "newzbin": "",
+        "priority": -100
+      },
+      {
+        "name": "tv",
+        "order": 2,
+        "pp": "",
+        "script": "Default",
+        "dir": "",
+        "newzbin": "",
+        "priority": -100
+      },
+      {
+        "name": "audio",
+        "order": 3,
+        "pp": "",
+        "script": "Default",
+        "dir": "",
+        "newzbin": "",
+        "priority": -100
+      },
+      {
+        "name": "software",
+        "order": 4,
+        "pp": "",
+        "script": "Default",
+        "dir": "",
+        "newzbin": "",
+        "priority": -100
+      }
+    ],
+    "misc": {
+      "language": "en",
+      "download_dir": "/downloads/incomplete",
+      "complete_dir": "/downloads",
+      "direct_unpack": true,
+      "pause_on_post_processing": 0,
+      "enable_unrar": 1,
+      "enable_filejoin": 1,
+      "enable_par_cleanup": 1,
+      "download_free": "",
+      "fulldisk_autoresume": 0
+    }
+  }
+}

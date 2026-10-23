@@ -1,0 +1,9 @@
+.git
+.env*
+conf
+.venv
+venv
+__pycache__
+*.pyc
+
+.hardware

@@ -7,13 +7,13 @@ import requests
 from datetime import datetime, timezone
 import paho.mqtt.client as mqtt
 
-MQTT_HOST = "localhost"
-MQTT_PORT = "1883"
-MQTT_TOPIC = "home/media/vpn/status"
-MQTT_USER = "some_user"
-MQTT_PASS = "some_password"
-MQTT_TLS = False
-MQTT_TLS_INSECURE = True
+MQTT_HOST = os.getenv("MQTT_HOST", "")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_TOPIC = os.getenv("MQTT_TOPIC", "home/media/vpn/status")
+MQTT_USER = os.getenv("MQTT_USER", "")
+MQTT_PASS = os.getenv("MQTT_PASS", "")
+MQTT_TLS = os.getenv("MQTT_TLS", "false").lower() == "true"
+MQTT_TLS_INSECURE = False
 
 HEALTH_URL = os.getenv("HEALTH_URL", "http://gluetun:9999/health")
 PUBLICIP_URL = os.getenv("PUBLICIP_URL", "http://gluetun:8000/v1/publicip/ip")
@@ -23,7 +23,7 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 def build_client():
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     if MQTT_USER and MQTT_PASS:
         client.username_pw_set(MQTT_USER, MQTT_PASS)
     if MQTT_TLS:
@@ -33,6 +33,7 @@ def build_client():
             ctx.verify_mode = ssl.CERT_NONE
         client.tls_set_context(ctx)
     client.connect(MQTT_HOST, MQTT_PORT, keepalive=60)
+    client.loop_start()
     return client
 
 def publish_status(client, status, reason=None, public_ip=None):
@@ -62,8 +63,10 @@ def check_health():
     return r.status_code == 200
 
 def main():
-    if not os.getenv("VPN_WATCHDOG_ENABLED", "false").lower() == True:
-        quit()
+    if os.getenv("VPN_WATCHDOG_ENABLED", "false").lower() != "true":
+        return
+    if not MQTT_HOST:
+        raise ValueError("Set MQTT_HOST before enabling VPN alerts")
 
     client = None
     last_up = None  # tri-state: None (unknown), True (up), False (down)
@@ -95,6 +98,9 @@ def main():
 
         except (mqtt.WebsocketConnectionError, ConnectionRefusedError, ssl.SSLError, OSError) as e:
             # MQTT hiccup → rebuild client on next loop
+            if client is not None:
+                client.loop_stop()
+                client.disconnect()
             client = None
 
         except Exception as e:

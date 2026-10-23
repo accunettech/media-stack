@@ -4,7 +4,7 @@ networks:
 
 services:
   homepage:
-    image: nginx:stable-alpine
+    image: nginx:stable-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951
     container_name: media-homepage
     networks: [media_net]
     ports:
@@ -19,7 +19,7 @@ services:
       retries: 3
 
   gluetun:
-    image: qmcgaw/gluetun@sha256:183c74263a07f4c931979140ac99ff4fbc44dcb1ca5b055856ef580b0fafdf1c
+    image: qmcgaw/gluetun:v3.41.3@sha256:fa19cc76b2af13d57a8d3dc3066f2ada061b1c761b8aecf989b3877c0486e027
     container_name: gluetun
     networks: [media_net]
     cap_add:
@@ -45,28 +45,38 @@ services:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9999/health"]
       interval: 15s
       timeout: 5s
-      retries: 3
+      retries: 8
+      start_period: 120s
     labels:
       deunhealth.restart.on.unhealthy: "true"
 
   # When running in container, initial password will be randomized. Check logs after first run
   # to get current password and then change after initial login.
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent@sha256:90c9eaad4a5c1d01ea9b223f874be0b0f9476a98a9f02df06f77877614d955a2
+    image: lscr.io/linuxserver/qbittorrent:latest@sha256:e887804fa9de4c60f5f0fb1f3a7e4febe40a8f69fe736f70c4e8589b1f868dab
     container_name: qbittorrent
     #Shares gluetun's network namespace + firewall/kill switch
     network_mode: "service:gluetun"
     depends_on:
       gluetun:
         condition: service_healthy
+        restart: true
     environment:
       - PUID=${OWNER_UID}
       - PGID=${OWNER_GID}
-      - TZ=America/Detroit
+      - TZ=${TZ:-America/Detroit}
       - WEBUI_PORT=8080
     volumes:
       - ${CONF_HOME}/qbittorrent:/config
       - ${DOWNLOADS_DIR}:/downloads
+    healthcheck:
+      test: ["CMD-SHELL", "test -d /sys/class/net/tun0 && ip route get 1.1.1.1 | grep -q 'dev tun0' && curl -fsS -o /dev/null http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      deunhealth.restart.on.unhealthy: "true"
     restart: unless-stopped
 
   jellyfin:
@@ -76,16 +86,10 @@ services:
     user: "${OWNER_UID}:${OWNER_GID}"
     networks: [media_net]
     environment:
-      - TZ=America/Detroit
-      - LIBVA_DRIVER_NAME=iHD
+      - TZ=${TZ:-America/Detroit}
     ports:
       - "8096:8096"           # HTTP
-    #Enable below only if hardware supports VAAPI for Intel iGPU (quick sync)
-    devices:
-      - /dev/dri/renderD128:/dev/dri/renderD128
-    group_add:
-      - ${RENDER_GID}
-      - ${VIDEO_GID}
+    # GPU devices/runtime are added by the ignored .hardware/compose.json.
     volumes:
       - ${CONF_HOME}/jellyfin/config:/config
       - ${CONF_HOME}/jellyfin/cache:/cache
@@ -93,13 +97,13 @@ services:
     restart: unless-stopped
 
   sonarr:
-    image: lscr.io/linuxserver/sonarr@sha256:c0836f49c20000e603170dc95d74c2527e690d50309977d94fc171eaa49351a4
+    image: lscr.io/linuxserver/sonarr:latest@sha256:889dcc58c6aea859033985894b519b2e6b1e55d92527ed123f9f52e42ae7c97b
     container_name: sonarr
     networks: [media_net]
     environment:
       - PUID=${OWNER_UID}
       - PGID=${OWNER_GID}
-      - TZ=America/Detroit
+      - TZ=${TZ:-America/Detroit}
     ports:
       - "8989:8989"
     volumes:
@@ -109,13 +113,13 @@ services:
     restart: unless-stopped
 
   radarr:
-    image: lscr.io/linuxserver/radarr@sha256:c2adf66bafefa781401d07d358e399c476bdffb9a179a2780bb465bda8a55a51
+    image: lscr.io/linuxserver/radarr:latest@sha256:fc0ae3c50f8128b97e84381903ec8d6845c3a569641cb7117c124376cccb57c1
     container_name: radarr
     networks: [media_net]
     environment:
       - PUID=${OWNER_UID}
       - PGID=${OWNER_GID}
-      - TZ=America/Detroit
+      - TZ=${TZ:-America/Detroit}
     ports:
       - "7878:7878"
     volumes:
@@ -125,7 +129,7 @@ services:
     restart: unless-stopped
 
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr@sha256:68160ec125e5cde23bc45549a443da0da0223cf4f0de7571ed2c6851cf6e1561
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
     shm_size: "2gb"
     container_name: flaresolverr
     restart: unless-stopped
@@ -136,13 +140,13 @@ services:
     networks: [media_net]
 
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr@sha256:25d21c04c7cc39a706217abb77bb60b283d9eaaf16acf539c930e3c797e21f25
+    image: lscr.io/linuxserver/prowlarr:latest@sha256:b3b00047ed20f6ce2b16780145cb6a0acb51c9e28ea6aa6f5dcd33c7034f1797
     container_name: prowlarr
     networks: [media_net]
     environment:
       - PUID=${OWNER_UID}
       - PGID=${OWNER_GID}
-      - TZ=America/Detroit
+      - TZ=${TZ:-America/Detroit}
     ports:
       - "9696:9696"
     volumes:
@@ -150,13 +154,13 @@ services:
     restart: unless-stopped
 
   sabnzbd:
-    image: lscr.io/linuxserver/sabnzbd@sha256:52c1742ce29fbd0d83468ec1a59e80fce507adaa8b8a9cb6176f3aa97be303f4
+    image: lscr.io/linuxserver/sabnzbd:latest@sha256:3ac1c9ea03bafa2588dd8acdcb809857bae305e71d2d90e11d689c78076a9c01
     container_name: sabnzbd
     networks: [media_net]
     environment:
       - PUID=${OWNER_UID}
       - PGID=${OWNER_GID}
-      - TZ=America/Detroit
+      - TZ=${TZ:-America/Detroit}
     # SAB's default HTTP port is 8080; qB is already using 8080 on the host via gluetun.
     # Expose SAB on 8081 externally to avoid a clash.
     ports:
@@ -174,7 +178,7 @@ services:
 
   # --- Auto-restart unhealthy containers (uses labels) ---
   deunhealth:
-    image: qmcgaw/deunhealth@sha256:fca3832ace35e3c028d3ec2e6271ac1161ed302b75b34e9dd01db1c106a25802
+    image: qmcgaw/deunhealth:latest@sha256:db1e4fcd3aceeb0da34a83f7a8a5432df586e6d0388ddb6ad8dd7b479e4aa25d
     container_name: deunhealth
     restart: unless-stopped
     network_mode: none
@@ -183,20 +187,29 @@ services:
 
   # --- VPN watchdog to alert if VPN goes down  ---
   vpn-watch:
-    image: python:3.12-alpine
+    image: python:3.12-alpine@sha256:b658b05ce9c4eb97ec6fc19424818a1f31993659c2b505a532f470e83807815d
+    profiles: ["vpn-alerts"]
     container_name: vpn-watch
     depends_on:
       - gluetun
     networks: [media_net]
     environment:
-      - VPN_WATCHDOG_ENABLED=${VPN_WATCHDOG_ENABLED}
+      - VPN_WATCHDOG_ENABLED=${VPN_WATCHDOG_ENABLED:-false}
+      - MQTT_HOST=${MQTT_HOST:-}
+      - MQTT_PORT=${MQTT_PORT:-1883}
+      - MQTT_USER=${MQTT_USER:-}
+      - MQTT_PASS=${MQTT_PASS:-}
+      - MQTT_TOPIC=${MQTT_TOPIC:-home/media/vpn/status}
+      - MQTT_TLS=${MQTT_TLS:-false}
       - PUID=${OWNER_UID}
       - PGID=${OWNER_GID}
     volumes:
       - ${SCRIPTS_HOME}:/app
     working_dir: /app
     entrypoint: ["/bin/sh","-c"]
-    command: >
-      "pip install --no-cache-dir paho-mqtt requests &&
-       python /app/vpn_watch.py"
-    restart: unless-stopped
+    command:
+      - |
+        [ "$${VPN_WATCHDOG_ENABLED}" = "true" ] || exit 0
+        pip install --no-cache-dir paho-mqtt==2.1.0 requests==2.34.2 &&
+        exec python /app/vpn_watch.py
+    restart: on-failure

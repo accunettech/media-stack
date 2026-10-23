@@ -1,3 +1,9 @@
-conf
-venv
-.env
+/conf/
+/.venv/
+/venv/
+.env.secrets
+.env.secrets.*
+!.env.secrets.example
+__pycache__/
+*.py[cod]
+/.hardware/
