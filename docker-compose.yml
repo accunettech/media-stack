@@ -96,6 +96,28 @@ services:
       - ${MEDIA_DIR}:/media:rw  # set to :ro if you don't want Jellyfin to write artwork/metadata
     restart: unless-stopped
 
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest@sha256:832820dec70bce9e912c6eee7a95baf6551e03dbc63325a7208daaa455423752
+    container_name: bazarr
+    networks: [media_net]
+    environment:
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
+      - TZ=${TZ:-America/Detroit}
+    ports:
+      - "6767:6767"
+    volumes:
+      - ${CONF_HOME}/bazarr:/config
+      - ${SHOWS_DIR}:/shows
+      - ${MOVIES_DIR}:/movies
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:6767/api/system/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest@sha256:889dcc58c6aea859033985894b519b2e6b1e55d92527ed123f9f52e42ae7c97b
     container_name: sonarr

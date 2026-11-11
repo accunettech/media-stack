@@ -150,3 +150,27 @@ bash -n setup.sh compose.sh
 ```
 
 The earlier fresh-configuration integration audit used separate empty config directories, a separate Compose network and local ports, and the pinned application images. The post-setup pytest suite above targets the existing configured stack; it does not create a fresh installation.
+
+## English subtitles
+
+Bazarr runs at `http://HOST:6767/` and uses the stack's `UI_USER` / `UI_PASS` login.
+Setup connects it to Sonarr/Radarr, imports their libraries, and assigns an **English full**
+profile to existing and new movies/series. External subtitles are required even when an
+embedded English track exists, and are saved beside the media for Jellyfin to discover.
+Forced-only subtitles do not satisfy this profile. Hearing-impaired subtitles are accepted.
+
+Gestdown, YIFY Subtitles and Subf2m are enabled. For broader coverage, optionally supply
+`SUBDL_API_KEY`, or `OPENSUBTITLES_USERNAME` and `OPENSUBTITLES_PASSWORD`, in
+`.env.secrets` or the environment and rerun `./setup.sh --configure-only`.
+Provider availability and release matching determine coverage; missing subtitles remain
+wanted and are searched every six hours. Bazarr also upgrades recent subtitle downloads.
+
+Downloaded subtitles are automatically aligned against audio with frame-rate correction.
+This does not rewrite embedded tracks or automatically repair every pre-existing sidecar;
+use Bazarr's manual sync/search for those. Different movie edits can still need another match.
+Jellyfin discovers sidecar files on its library scan; refresh the item if needed.
+
+Setup preserves Bazarr state under `CONF_HOME/bazarr`, creates a native backup before
+changing its settings, and reapplies the managed profile on reruns. `./setup.sh --check`
+verifies settings and imported library IDs without starting subtitle searches. To backfill
+an existing library immediately, run the missing-series/movie subtitle tasks in Bazarr.

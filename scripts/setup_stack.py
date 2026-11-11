@@ -20,7 +20,7 @@ def ensure_directories(env):
     dirs = [Path(env[k]) for k in ['MEDIA_DIR', 'MOVIES_DIR', 'SHOWS_DIR', 'DOWNLOADS_DIR']]
     conf = Path(env['CONF_HOME'])
     dirs += [conf / name for name in ['gluetun', 'qbittorrent', 'sonarr', 'radarr', 'prowlarr',
-                                     'sabnzbd', 'jellyfin/config', 'jellyfin/cache']]
+                                     'sabnzbd', 'bazarr', 'jellyfin/config', 'jellyfin/cache']]
     # Never recursively chown or chmod an existing media collection.
     for path in dirs:
         if not path.exists():

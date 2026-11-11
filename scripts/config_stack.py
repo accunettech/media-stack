@@ -85,7 +85,7 @@ def verify_homepage():
     """Verify the bundled dashboard and its assets through the published port."""
     assets = ['index.html', 'style.css', 'links.js']
     assets += [f'icons/{name}.svg' for name in
-               ('jellyfin', 'sonarr', 'radarr', 'prowlarr', 'qbittorrent', 'sabnzbd')]
+               ('jellyfin', 'sonarr', 'radarr', 'prowlarr', 'qbittorrent', 'sabnzbd', 'bazarr')]
     session = requests.Session()
     session.trust_env = False
     try:
@@ -516,6 +516,8 @@ def main():
         stack.connect_jellyfin(allow_startup=not args.check)
         if not args.check:
             stack.configure_jellyfin()
+        from bazarr import reconcile
+        reconcile(settings, stack.variables, check=args.check)
         stack.verify(external=not args.skip_external_tests)
     except (SetupError, RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as exc:
         print(f'Setup failed: {exc}', file=sys.stderr)
