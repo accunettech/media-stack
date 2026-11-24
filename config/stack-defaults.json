@@ -61,6 +61,10 @@
             {
               "name": "Language: Not English",
               "score": -10000
+            },
+            {
+              "name": "Language: Spanish title without English",
+              "score": -10000
             }
           ],
           "allowedQualityIds": [
@@ -91,6 +95,10 @@
             {
               "name": "Language: Not English",
               "score": -10000
+            },
+            {
+              "name": "Language: Spanish title without English",
+              "score": -10000
             }
           ],
           "allowedQualityIds": [
@@ -113,6 +121,10 @@
             {
               "name": "Language: Not English",
               "score": -10000
+            },
+            {
+              "name": "Language: Spanish title without English",
+              "score": -10000
             }
           ],
           "allowedQualityIds": [
@@ -132,6 +144,10 @@
           "formatItems": [
             {
               "name": "Language: Not English",
+              "score": -10000
+            },
+            {
+              "name": "Language: Spanish title without English",
               "score": -10000
             }
           ],
@@ -153,6 +169,10 @@
             {
               "name": "Language: Not English",
               "score": -10000
+            },
+            {
+              "name": "Language: Spanish title without English",
+              "score": -10000
             }
           ],
           "allowedQualityIds": [
@@ -172,6 +192,10 @@
           "formatItems": [
             {
               "name": "Language: Not English",
+              "score": -10000
+            },
+            {
+              "name": "Language: Spanish title without English",
               "score": -10000
             }
           ],
@@ -205,6 +229,24 @@
                 {
                   "name": "exceptLanguage",
                   "value": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Language: Spanish title without English",
+          "includeCustomFormatWhenRenaming": false,
+          "specifications": [
+            {
+              "name": "Spanish or Latino title without English marker",
+              "implementation": "ReleaseTitleSpecification",
+              "negate": false,
+              "required": false,
+              "fields": [
+                {
+                  "name": "value",
+                  "value": "(?i)^(?!.*\\b(?:eng|english)\\b).*\\b(?:spanish|espanol|espa\u00f1ol|castellano|latino)\\b"
                 }
               ]
             }
