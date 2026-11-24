@@ -690,6 +690,155 @@
           "tags": []
         }
       ]
+    },
+    "lidarr": {
+      "delayprofiles": [
+        {
+          "name": "Default",
+          "items": [
+            {
+              "name": "Usenet",
+              "protocol": "UsenetDownloadProtocol",
+              "allowed": true,
+              "delay": 0
+            },
+            {
+              "name": "Torrent",
+              "protocol": "TorrentDownloadProtocol",
+              "allowed": true,
+              "delay": 60
+            }
+          ],
+          "bypassIfHighestQuality": true,
+          "bypassIfAboveCustomFormatScore": false,
+          "minimumCustomFormatScore": 0,
+          "order": 2147483647,
+          "tags": []
+        }
+      ],
+      "downloadclients": [
+        {
+          "enable": true,
+          "protocol": "TorrentDownloadProtocol",
+          "priority": 2,
+          "removeCompletedDownloads": false,
+          "removeFailedDownloads": false,
+          "name": "qbittorrent",
+          "fields": [
+            {
+              "name": "host",
+              "value": "gluetun"
+            },
+            {
+              "name": "port",
+              "value": 8080
+            },
+            {
+              "name": "useSsl",
+              "value": false
+            },
+            {
+              "name": "urlBase",
+              "value": ""
+            },
+            {
+              "name": "username",
+              "value": "${UI_USER}"
+            },
+            {
+              "name": "password",
+              "value": "${UI_PASS}"
+            },
+            {
+              "name": "musicCategory",
+              "value": "lidarr"
+            },
+            {
+              "name": "musicImportedCategory"
+            },
+            {
+              "name": "recentMusicPriority",
+              "value": 0
+            },
+            {
+              "name": "olderMusicPriority",
+              "value": 0
+            },
+            {
+              "name": "initialState",
+              "value": 0
+            },
+            {
+              "name": "sequentialOrder",
+              "value": false
+            },
+            {
+              "name": "firstAndLast",
+              "value": false
+            },
+            {
+              "name": "contentLayout",
+              "value": 0
+            }
+          ],
+          "implementation": "QBittorrent",
+          "configContract": "QBittorrentSettings",
+          "tags": []
+        },
+        {
+          "enable": true,
+          "protocol": "UsenetDownloadProtocol",
+          "priority": 1,
+          "removeCompletedDownloads": false,
+          "removeFailedDownloads": false,
+          "name": "sabnzbd",
+          "fields": [
+            {
+              "name": "host",
+              "value": "sabnzbd"
+            },
+            {
+              "name": "port",
+              "value": 8080
+            },
+            {
+              "name": "useSsl",
+              "value": false
+            },
+            {
+              "name": "urlBase",
+              "value": ""
+            },
+            {
+              "name": "apiKey",
+              "value": "${SAB_API_KEY}"
+            },
+            {
+              "name": "username",
+              "value": ""
+            },
+            {
+              "name": "password",
+              "value": ""
+            },
+            {
+              "name": "musicCategory",
+              "value": "audio"
+            },
+            {
+              "name": "recentMusicPriority",
+              "value": -100
+            },
+            {
+              "name": "olderMusicPriority",
+              "value": -100
+            }
+          ],
+          "implementation": "SABnzbd",
+          "configContract": "SabnzbdSettings",
+          "tags": []
+        }
+      ]
     }
   },
   "prowlarr": {
@@ -865,6 +1014,42 @@
     "applications": [
       {
         "syncLevel": "fullSync",
+        "name": "Lidarr",
+        "fields": [
+          {
+            "name": "prowlarrUrl",
+            "value": "http://prowlarr:9696"
+          },
+          {
+            "name": "baseUrl",
+            "value": "http://lidarr:8686"
+          },
+          {
+            "name": "apiKey",
+            "value": "${LIDARR_API_KEY}"
+          },
+          {
+            "name": "syncCategories",
+            "value": [
+              3000,
+              3010,
+              3030,
+              3040,
+              3050,
+              3060
+            ]
+          },
+          {
+            "name": "syncRejectBlocklistedTorrentHashesWhileGrabbing",
+            "value": false
+          }
+        ],
+        "implementation": "Lidarr",
+        "configContract": "LidarrSettings",
+        "tags": []
+      },
+      {
+        "syncLevel": "fullSync",
         "name": "Radarr",
         "fields": [
           {
@@ -982,6 +1167,10 @@
     "bypass_auth_subnet_whitelist_enabled": false
   },
   "qbittorrentCategories": {
+    "lidarr": {
+      "name": "lidarr",
+      "savePath": ""
+    },
     "radarr": {
       "name": "radarr",
       "savePath": ""
@@ -1061,6 +1250,12 @@
       "SubtitleMode": "Smart"
     },
     "libraries": [
+      {
+        "name": "Music",
+        "type": "music",
+        "path": "/media/music",
+        "options": {}
+      },
       {
         "name": "Shows",
         "type": "tvshows",

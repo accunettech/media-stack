@@ -150,6 +150,22 @@ services:
       - ${DOWNLOADS_DIR}:/downloads
     restart: unless-stopped
 
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest@sha256:8fb40ada166dd1880cb1b166df5bcbb081107523f20ab60df05c313e2052a467
+    container_name: lidarr
+    networks: [media_net]
+    environment:
+      - PUID=${OWNER_UID}
+      - PGID=${OWNER_GID}
+      - TZ=${TZ:-America/Detroit}
+    ports:
+      - "8686:8686"
+    volumes:
+      - ${CONF_HOME}/lidarr:/config
+      - ${MEDIA_DIR}/music:/music
+      - ${DOWNLOADS_DIR}:/downloads
+    restart: unless-stopped
+
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
     shm_size: "2gb"

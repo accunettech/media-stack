@@ -18,8 +18,9 @@ def runtime_settings():
 
 def ensure_directories(env):
     dirs = [Path(env[k]) for k in ['MEDIA_DIR', 'MOVIES_DIR', 'SHOWS_DIR', 'DOWNLOADS_DIR']]
+    dirs.append(Path(env['MEDIA_DIR']) / 'music')
     conf = Path(env['CONF_HOME'])
-    dirs += [conf / name for name in ['gluetun', 'qbittorrent', 'sonarr', 'radarr', 'prowlarr',
+    dirs += [conf / name for name in ['gluetun', 'qbittorrent', 'sonarr', 'radarr', 'lidarr', 'prowlarr',
                                      'sabnzbd', 'bazarr', 'jellyfin/config', 'jellyfin/cache']]
     # Never recursively chown or chmod an existing media collection.
     for path in dirs:

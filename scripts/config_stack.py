@@ -22,6 +22,11 @@ class SetupError(RuntimeError):
     pass
 
 
+ARR_ENDPOINTS = {'sonarr': (8989, 3), 'radarr': (7878, 3),
+                 'lidarr': (8686, 1), 'prowlarr': (9696, 1)}
+ARR_ROOTS = {'sonarr': '/shows', 'radarr': '/movies', 'lidarr': '/music'}
+
+
 class API:
     def __init__(self, base, headers=None, session=None):
         self.base = base.rstrip('/')
@@ -85,7 +90,7 @@ def verify_homepage():
     """Verify the bundled dashboard and its assets through the published port."""
     assets = ['index.html', 'style.css', 'links.js']
     assets += [f'icons/{name}.svg' for name in
-               ('jellyfin', 'sonarr', 'radarr', 'prowlarr', 'qbittorrent', 'sabnzbd', 'bazarr')]
+               ('jellyfin', 'sonarr', 'radarr', 'lidarr', 'prowlarr', 'qbittorrent', 'sabnzbd', 'bazarr')]
     session = requests.Session()
     session.trust_env = False
     try:
@@ -116,6 +121,16 @@ def equivalent(actual, wanted):
             return all(v['name'] in lookup and equivalent(lookup[v['name']], v) for v in wanted)
         return len(actual) == len(wanted) and all(equivalent(a, b) for a, b in zip(actual, wanted))
     return actual == wanted
+
+
+def matches_provider(actual, wanted):
+    # Arr APIs mask saved credentials. Test the providers for connectivity separately.
+    expected = copy.deepcopy(wanted)
+    masked = {field['name'] for field in actual.get('fields', []) if field.get('value') == '********'}
+    for field in expected['fields']:
+        if field['name'] in masked & {'password', 'apiKey'} and field.get('value'):
+            field['value'] = '********'
+    return equivalent(actual, expected)
 
 
 def upsert(api, resource, wanted, match='name'):
@@ -184,9 +199,10 @@ class Stack:
             return result.get('status') == 'completed'
         wait_for(done, description)
 
-    def connect_arr(self):
+    def connect_arr(self, apps=ARR_ENDPOINTS):
         conf = Path(self.env['CONF_HOME'])
-        for app, port, version in [('sonarr', 8989, 3), ('radarr', 7878, 3), ('prowlarr', 9696, 1)]:
+        for app in apps:
+            port, version = ARR_ENDPOINTS[app]
             key = wait_for(lambda: ET.parse(conf / app / 'config.xml').findtext('ApiKey'), f'{app} API key')
             api = API(self.env.get(app.upper() + '_URL', f'http://127.0.0.1:{port}') + f'/api/v{version}',
                       {'X-Api-Key': key})
@@ -264,13 +280,16 @@ class Stack:
 
     def configure_qbt(self):
         self.qbt.call('POST', 'app/setPreferences', data={'json': json.dumps(self.defaults['qbittorrent'])})
+        self.configure_qbt_categories(self.defaults['qbittorrentCategories'])
+        print('qBittorrent authentication, download paths and categories configured.')
+
+    def configure_qbt_categories(self, categories):
         existing = self.qbt.call('GET', 'torrents/categories')
-        for name, category in self.defaults['qbittorrentCategories'].items():
+        for name, category in categories.items():
             if name in existing and existing[name].get('savePath', '') == category['savePath']:
                 continue
             self.qbt.call('POST', 'torrents/editCategory' if name in existing else 'torrents/createCategory',
                           data={'category': name, 'savePath': category['savePath']})
-        print('qBittorrent authentication, download paths and categories configured.')
 
     def configure_arr(self):
         for app in ['sonarr', 'radarr']:
@@ -297,20 +316,51 @@ class Stack:
             for wanted in desired['delayprofiles']:
                 # Default delay profile has no name; match its order, not a historical ID.
                 upsert(api, 'delayprofile', wanted, match='order')
-            path = '/shows' if app == 'sonarr' else '/movies'
+            path = ARR_ROOTS[app]
             if not any(r['path'] == path for r in api.call('GET', 'rootfolder')):
                 api.call('POST', 'rootfolder', json={'path': path})
             for wanted in desired['downloadclients']:
                 upsert(api, 'downloadclient', expand(wanted, self.variables))
-        for app, api in self.arr.items():
-            patch_resource(api, 'config/host', {'authenticationMethod': 'forms',
-                'authenticationRequired': 'enabled', 'username': self.env['UI_USER'],
-                'password': self.env['UI_PASS'], 'passwordConfirmation': self.env['UI_PASS']})
-            if app != 'prowlarr':
-                host = api.call('GET', 'config/host')
-                patch_resource(api, 'config/host', {k: v for k, v in {
-                    'updateMechanism': 'docker', 'updateAutomatically': False}.items() if k in host})
+        self.configure_lidarr()
+        for app in ('sonarr', 'radarr', 'prowlarr'):
+            self.configure_arr_host(app)
         print('Arr profiles, English rules, 60-minute Usenet fallback, clients and authentication configured.')
+
+    def configure_arr_host(self, app):
+        api = self.arr[app]
+        patch_resource(api, 'config/host', {'authenticationMethod': 'forms',
+            'authenticationRequired': 'enabled', 'username': self.env['UI_USER'],
+            'password': self.env['UI_PASS'], 'passwordConfirmation': self.env['UI_PASS']})
+        if app != 'prowlarr':
+            host = api.call('GET', 'config/host')
+            patch_resource(api, 'config/host', {k: v for k, v in {
+                'updateMechanism': 'docker', 'updateAutomatically': False}.items() if k in host})
+
+    def configure_lidarr(self):
+        api = self.arr['lidarr']
+        self.configure_arr_host('lidarr')
+        root = ARR_ROOTS['lidarr']
+        if not any(r['path'] == root for r in api.call('GET', 'rootfolder')):
+            profiles = {}
+            for endpoint, name in [('qualityprofile', 'Any'), ('metadataprofile', 'Standard')]:
+                profile = next((p for p in api.call('GET', endpoint) if p['name'] == name), None)
+                if not profile:
+                    raise SetupError(f'Lidarr is missing its {name} profile ({endpoint})')
+                profiles[endpoint] = profile['id']
+            api.call('POST', 'rootfolder', json={
+                'name': 'Music', 'path': root, 'defaultQualityProfileId': profiles['qualityprofile'],
+                'defaultMetadataProfileId': profiles['metadataprofile'], 'defaultTags': [],
+                'defaultMonitorOption': 'all', 'defaultNewItemMonitorOption': 'all'})
+        desired = self.defaults['arr']['lidarr']
+        for wanted in desired['delayprofiles']:
+            upsert(api, 'delayprofile', wanted, match='order')
+        for wanted in desired['downloadclients']:
+            upsert(api, 'downloadclient', expand(wanted, self.variables))
+
+    def sync_prowlarr(self):
+        api = self.arr['prowlarr']
+        command = api.call('POST', 'command', json={'name': 'ApplicationIndexerSync'})
+        self.wait_command(api, command['id'], 'Prowlarr application sync')
 
     def configure_prowlarr(self):
         api = self.arr['prowlarr']
@@ -331,8 +381,7 @@ class Stack:
                 if 'appProfileName' in wanted:
                     wanted['appProfileId'] = profiles[wanted.pop('appProfileName')]
                 upsert(api, endpoint, wanted)
-        command = api.call('POST', 'command', json={'name': 'ApplicationIndexerSync'})
-        self.wait_command(api, command['id'], 'Prowlarr application sync')
+        self.sync_prowlarr()
         print('Prowlarr proxy, four indexers and full Arr sync configured.')
 
     def jelly_headers(self, token=None):
@@ -381,8 +430,12 @@ class Stack:
         user = self.jelly_user['Configuration']
         user.update(desired['user'])
         self.jelly.call('POST', 'Users/Configuration', params={'userId': self.jelly_user['Id']}, json=user)
+        self.configure_jellyfin_libraries(desired['libraries'])
+        print('Jellyfin user, English audio, libraries and audited Intel QSV settings configured.')
+
+    def configure_jellyfin_libraries(self, libraries):
         existing = self.jelly.call('GET', 'Library/VirtualFolders')
-        for library in desired['libraries']:
+        for library in libraries:
             current = next((l for l in existing if l['Name'] == library['name']), None)
             options = copy.deepcopy(library['options'])
             if current:
@@ -391,27 +444,56 @@ class Stack:
                     self.jelly.call('POST', 'Library/VirtualFolders/Paths', params={
                         'refreshLibrary': False}, json={'Name': library['name'],
                                                        'Path': library['path']})
-                opts = current['LibraryOptions']; opts.update(options)
-                self.jelly.call('POST', 'Library/VirtualFolders/LibraryOptions', json={
-                    'Id': current['ItemId'], 'LibraryOptions': opts})
+                if options:
+                    opts = current['LibraryOptions']
+                    opts.update(options)
+                    self.jelly.call('POST', 'Library/VirtualFolders/LibraryOptions', json={
+                        'Id': current['ItemId'], 'LibraryOptions': opts})
             else:
                 self.jelly.call('POST', 'Library/VirtualFolders', params={
                     'name': library['name'], 'collectionType': library['type'], 'refreshLibrary': False},
                     json={'LibraryOptions': {**options, 'PathInfos': [{'Path': library['path']}]}})
-        print('Jellyfin user, English audio, libraries and audited Intel QSV settings configured.')
+
+    def verify_lidarr(self):
+        api = self.arr['lidarr']
+        host = api.call('GET', 'config/host')
+        if not equivalent(host, {'authenticationMethod': 'forms', 'authenticationRequired': 'enabled'}):
+            raise SetupError('Lidarr browser authentication differs')
+        if not any(r.get('accessible') and r['path'] == ARR_ROOTS['lidarr']
+                   for r in api.call('GET', 'rootfolder')):
+            raise SetupError('Lidarr music root is not accessible')
+        desired = self.defaults['arr']['lidarr']
+        delays = api.call('GET', 'delayprofile')
+        if not all(any(equivalent(item, wanted) for item in delays) for wanted in desired['delayprofiles']):
+            raise SetupError('Lidarr delay settings differ')
+        clients = api.call('GET', 'downloadclient')
+        for template in desired['downloadclients']:
+            wanted = expand(template, self.variables)
+            client = next((item for item in clients if item['name'] == wanted['name']), {})
+            if not matches_provider(client, wanted):
+                raise SetupError(f"Lidarr download client differs: {wanted['name']}")
+            try:
+                api.call('POST', 'downloadclient/test', json={**client, **wanted})
+            except SetupError as exc:
+                raise SetupError(f"Lidarr download client {wanted['name']}: {exc}") from None
+        template = next(a for a in self.defaults['prowlarr']['applications'] if a['name'] == 'Lidarr')
+        app = expand(template, self.variables)
+        if not any(matches_provider(item, app) for item in self.arr['prowlarr'].call('GET', 'applications')):
+            raise SetupError('Prowlarr application configuration differs for Lidarr')
 
     def verify(self, external=True):
         for app, api in self.arr.items():
-            if app != 'prowlarr':
+            if app in ('sonarr', 'radarr'):
                 for client in api.call('GET', 'downloadclient'):
                     api.call('POST', 'downloadclient/test', json=client)
                 roots = api.call('GET', 'rootfolder')
-                if not any(r.get('accessible') and r['path'] == ('/shows' if app == 'sonarr' else '/movies') for r in roots):
+                if not any(r.get('accessible') and r['path'] == ARR_ROOTS[app] for r in roots):
                     raise SetupError(f'{app} root folder is not accessible')
             for health in api.call('GET', 'health'):
                 print(f"{app} health: {health['source']} ({health['type']})")
                 if health['type'] == 'error' and health['source'] != 'UpdateCheck':
                     raise SetupError(f"{app} health failure: {health['source']}")
+        self.verify_lidarr()
         if external:
             for idx in self.arr['prowlarr'].call('GET', 'indexer'):
                 if idx.get('enable'):

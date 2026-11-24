@@ -1,6 +1,6 @@
 # Media stack
 
-A Linux Docker Compose stack with Jellyfin, Sonarr, Radarr, Prowlarr, qBittorrent through NordVPN/Gluetun, SABnzbd/Newshosting, NZBgeek, FlareSolverr, and a local dashboard.
+A Linux Docker Compose stack with Jellyfin, Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent through NordVPN/Gluetun, SABnzbd/Newshosting, NZBgeek, FlareSolverr, and a local dashboard.
 
 ## Clone and set up
 
@@ -12,7 +12,7 @@ This deployment reproduces the settings verified on October 23, 2026, on an Inte
    | Variable | Purpose |
    |---|---|
    | `OPENVPN_PASSWORD` | NordVPN **service** password, paired with public `OPENVPN_USER` |
-   | `UI_PASS` | Sonarr, Radarr, Prowlarr, qBittorrent and SAB browser password |
+   | `UI_PASS` | Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent and SAB browser password |
    | `JELLYFIN_PASSWORD` | Jellyfin administrator password; account name is `JELLYFIN_USER` |
    | `SAB_SRV_PASS` | Newshosting NNTP password, paired with `SAB_SRV_USER` |
    | `USENET_DEFAULT_APIKEY` | NZBgeek API key; requires active membership |
@@ -45,8 +45,9 @@ Validation/check modes require the Python environment created by setup. `--confi
 - All six Sonarr profiles use `Language: Not English` at `-10000`, minimum score `0`. All six Radarr profiles require built-in language `English`. Upgrades remain disabled. Multilingual releases containing English pass; detected German-only releases fail. Unknown language metadata can also fail until English is identified. The rule follows [TRaSH's language guidance](https://trash-guides.info/Sonarr/Tips/How-to-setup-language-custom-formats/).
 - Both Arr apps prefer Usenet with zero delay and a **60-minute** torrent fallback delay. Existing bypass settings are reproduced. SAB priority is 1 and qBittorrent priority is 2.
 - qBittorrent paths are `/downloads` and `/downloads/incomplete`; its actual Arr categories are `tv-sonarr` and `radarr`. SAB categories are `tv` and `movies` (plus the existing default/audio/software categories). SAB browser authentication, English UI, TLS NNTP provider with 20 connections, paths and post-processing defaults are configured through its API.
-- Prowlarr gets 1337x, EZTV, The Pirate Bay and NZBgeek, priorities 30/10, the tagged FlareSolverr proxy, and full sync to Sonarr/Radarr. The same category filters and search flags are restored. Manage later indexer changes in Prowlarr; editing the declarative snapshot changes what future setup runs enforce.
-- Jellyfin's startup wizard is completed automatically on a fresh install, with the supplied administrator login and Movies/Shows libraries at `/media/movies` and `/media/shows`. English metadata and audio/subtitle preferences are applied, with smart subtitles, file-default audio disabled and remembered audio choices disabled.
+- Prowlarr gets 1337x, EZTV, The Pirate Bay and NZBgeek, priorities 30/10, the tagged FlareSolverr proxy, and full sync to Sonarr, Radarr, and Lidarr. The same category filters and search flags are restored. Manage later indexer changes in Prowlarr; editing the declarative snapshot changes what future setup runs enforce.
+- Lidarr uses `${MEDIA_DIR}/music` as `/music`, with the native Any quality and Standard metadata profiles. It uses SABnzbd category `audio` and qBittorrent category `lidarr`.
+- Jellyfin's startup wizard is completed automatically on a fresh install, with the supplied administrator login and Movies, Shows, and Music libraries at `/media/movies`, `/media/shows`, and `/media/music`. English metadata and audio/subtitle preferences are applied, with smart subtitles, file-default audio disabled and remembered audio choices disabled.
 - Jellyfin acceleration and codec settings follow the local hardware probe described below. On the verified Intel Arc host this includes QSV encoding, native VA-API decoding, low-power H.264/HEVC encoding and VPP/OpenCL initialization. The 180-second transcode throttle buffer, disabled segment deletion, internal `/cache/transcodes` path and unlimited server remote bitrate are reproduced across hosts.
 - Gluetun/qBittorrent health/recovery configuration, dashboard hosting and the disabled optional MQTT watchdog are retained in Compose. All service image references and the Jellyfin base are pinned to recorded digests. The custom Jellyfin image installs OpenCL packages from its distribution repository; those OS package versions are not a frozen package mirror.
 
@@ -97,6 +98,7 @@ The MQTT watcher is excluded from normal Compose startup. Setup reconciles it to
 |---|---|
 | Dashboard | `http://stuff/` |
 | Radarr | `http://stuff:7878/` |
+| Lidarr | `http://stuff:8686/` |
 | Sonarr | `http://stuff:8989/` |
 | Jellyfin | `http://stuff:8096/` |
 | Prowlarr | `http://stuff:9696/` |
